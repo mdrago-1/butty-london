@@ -24,7 +24,7 @@ export const Route = createRootRoute({
         content:
           "Butty & Co. Sandwich & Juice Bar, 19 Replingham Road, Southfields SW18 5LT.",
       },
-      { name: "theme-color", content: "#F9E24A" },
+      { name: "theme-color", content: "#FFE05E" },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
@@ -39,7 +39,7 @@ export const Route = createRootRoute({
       },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;500;600;700&family=Open+Sans:wght@400;600&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Bungee&family=Inter:wght@400;500;600;700&display=swap",
       },
     ],
   }),
