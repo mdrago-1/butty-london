@@ -1,0 +1,103 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: Genty;
+  src: url("/fonts/Genty.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --color-butty-yellow: #f9e24a;
+  --color-butty-red: #ef2d3b;
+  --color-butty-red-deep: #c81e2b;
+  --color-butty-ink: #1a1613;
+  --color-butty-cream: #fff8e6;
+  --color-butty-paper: #fffcf3;
+  --color-butty-green: #2e7d46;
+  --color-butty-green-deep: #1f5730;
+  --color-butty-muted: #8a8178;
+  --color-butty-faint: #a99f92;
+  --color-butty-line: #e0d6bf;
+  --color-butty-track: #eadfc6;
+  --color-butty-disabled: #d8cfc0;
+  --color-butty-shadow: #e7ddc4;
+  --color-butty-warn: #8a5a00;
+  --color-butty-warn-bg: #fff4e0;
+  --color-butty-ok-bg: #e9f6ec;
+  --color-butty-pause: #f3e9d0;
+  --color-butty-kitchen: #2a241e;
+  --color-butty-kitchen-line: #3d362e;
+  --color-butty-kitchen-border: #5a5148;
+  --font-display: "Bungee", system-ui, sans-serif;
+  --font-logo: "Genty", cursive;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-tag: "Open Sans", system-ui, sans-serif;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html,
+  body,
+  #app {
+    min-height: 100%;
+    background: var(--color-butty-yellow);
+    color: var(--color-butty-ink);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+}
+
+@keyframes butty-pop {
+  0% {
+    transform: scale(0.88);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes butty-pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.butty-pop {
+  animation: butty-pop 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .butty-pop,
+  .butty-spin {
+    animation: none;
+  }
+}
