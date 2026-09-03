@@ -18,6 +18,7 @@ import {
   setShopFlags,
   toggleSoldOut,
   upsertMenuItem as apiUpsertItem,
+  voidCounterOrder as apiVoidOrder,
 } from "./shop-api";
 import type { Account, MenuItem, Order, OrderLine } from "./types";
 
@@ -58,6 +59,7 @@ type ShopState = {
   }) => Promise<number>;
   setStage: (no: number, stage: number) => Promise<void>;
   markCollected: (no: number) => Promise<void>;
+  voidOrder: (id: string) => Promise<void>;
   upsertItem: (item: MenuItem) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
   toggleSold: (id: string) => Promise<void>;
@@ -164,6 +166,10 @@ export const useShop = create<ShopState>()(
       },
       markCollected: async (no) => {
         await markOrderCollected({ data: { no } });
+        await get().refresh();
+      },
+      voidOrder: async (id) => {
+        await apiVoidOrder({ data: { id } });
         await get().refresh();
       },
       upsertItem: async (item) => {

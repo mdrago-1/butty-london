@@ -6,6 +6,7 @@ import { optionalAuth } from "@/lib/optional-auth";
 import {
   kitchenMiddleware,
   managerMiddleware,
+  tillOperatorMiddleware,
 } from "@/lib/staff-middleware";
 import type { Extra, MenuItem, Order, OrderLine } from "@/lib/types";
 
@@ -55,6 +56,9 @@ type OrderRow = {
   points_earned?: unknown;
   discount_gbp?: unknown;
   source?: string;
+  taken_by?: string | null;
+  taken_by_name?: string | null;
+  voided?: boolean;
 };
 
 type LineRow = {
@@ -106,6 +110,9 @@ function rowToOrder(o: OrderRow, lines: LineRow[]): Order {
     pointsEarned: num(o.points_earned),
     discountGbp: num(o.discount_gbp),
     source: o.source === "counter" ? "counter" : "app",
+    takenBy: o.taken_by || null,
+    takenByName: o.taken_by_name || null,
+    voided: !!o.voided,
   };
 }
 
@@ -134,9 +141,11 @@ export const getShopSnapshot = createServerFn({ method: "GET" }).handler(
     const orderRows = await sql<OrderRow>`
       select id, order_no, ticket_name, collect_time, stage, collected,
              collected_at, paid, created_at, points_earned, discount_gbp,
-             coalesce(source, 'app') as source
+             coalesce(source, 'app') as source,
+             taken_by, taken_by_name, coalesce(voided, false) as voided
       from orders
       where paid = true
+        and coalesce(voided, false) = false
         and (collected = false or created_at > now() - interval '2 days')
       order by created_at desc
       limit 80
@@ -351,7 +360,7 @@ export const placeShopOrder = createServerFn({ method: "POST" })
   });
 
 export const placeCounterOrder = createServerFn({ method: "POST" })
-  .middleware([kitchenMiddleware])
+  .middleware([tillOperatorMiddleware])
   .validator(
     (input: {
       lines: OrderLine[];
@@ -360,7 +369,7 @@ export const placeCounterOrder = createServerFn({ method: "POST" })
       redeemReward?: boolean;
     }) => input,
   )
-  .handler(async ({ data }): Promise<Order> => {
+  .handler(async ({ data, context }): Promise<Order> => {
     const sql = await getSql();
     const lines = Array.isArray(data.lines) ? data.lines : [];
     if (lines.length === 0) throw new Error("Empty order");
@@ -462,10 +471,11 @@ export const placeCounterOrder = createServerFn({ method: "POST" })
       await sql`
         insert into orders
           (id, order_no, ticket_name, collect_time, stage, paid, amount_total,
-           user_id, points_earned, discount_gbp, source)
+           user_id, points_earned, discount_gbp, source, taken_by, taken_by_name)
         values
           (${id}, ${no}, ${ticket}, ${"now"}, 0, true, ${amount},
-           ${userId ?? null}, ${earned}, ${discount}, ${"counter"})
+           ${userId ?? null}, ${earned}, ${discount}, ${"counter"},
+           ${context.employeeId}, ${context.employeeName || null})
       `;
       for (const l of priced) {
         await sql.query(
@@ -520,7 +530,8 @@ export const placeCounterOrder = createServerFn({ method: "POST" })
     const created = await sql<OrderRow>`
       select id, order_no, ticket_name, collect_time, stage, collected,
              collected_at, paid, created_at, points_earned, discount_gbp,
-             coalesce(source, 'app') as source
+             coalesce(source, 'app') as source,
+             taken_by, taken_by_name, coalesce(voided, false) as voided
       from orders where id = ${id}
     `;
     const createdLines = await sql<LineRow>`
@@ -536,7 +547,7 @@ export const setOrderStage = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const stage = Math.max(0, Math.min(3, Math.round(data.stage)));
     const sql = await getSql();
-    await sql`update orders set stage = ${stage} where order_no = ${data.no} and collected = false`;
+    await sql`update orders set stage = ${stage} where order_no = ${data.no} and collected = false and coalesce(voided, false) = false`;
     return { ok: true };
   });
 
@@ -548,7 +559,7 @@ export const markOrderCollected = createServerFn({ method: "POST" })
     await sql`
       update orders
       set collected = true, collected_at = now(), stage = 3
-      where order_no = ${data.no}
+      where order_no = ${data.no} and coalesce(voided, false) = false
     `;
     return { ok: true };
   });
@@ -632,4 +643,24 @@ export const deleteMenuItem = createServerFn({ method: "POST" })
     const sql = await getSql();
     await sql`delete from menu_items where id = ${data.id}`;
     return { ok: true };
+  });
+
+export const voidCounterOrder = createServerFn({ method: "POST" })
+  .middleware([tillOperatorMiddleware])
+  .validator((input: { id: string }) => input)
+  .handler(async ({ data, context }) => {
+    if (context.tillRole !== "manager") {
+      throw new Error("A manager has to void a ticket.");
+    }
+    const sql = await getSql();
+    const updated = await sql<{ id: string }>`
+      update orders
+      set voided = true, voided_at = now(), voided_by = ${context.employeeId}
+      where id = ${data.id}
+        and collected = false
+        and coalesce(voided, false) = false
+      returning id
+    `;
+    if (!updated[0]) throw new Error("That ticket can't be voided.");
+    return { ok: true as const };
   });

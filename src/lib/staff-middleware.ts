@@ -11,3 +11,31 @@ function staffMiddleware(min: StaffRole) {
 
 export const kitchenMiddleware = staffMiddleware("kitchen");
 export const managerMiddleware = staffMiddleware("manager");
+
+export const tillOperatorMiddleware = createMiddleware({
+  type: "function",
+}).server(async ({ next }) => {
+  const { requireTillOperator } = await import("@/lib/staff.server");
+  const till = await requireTillOperator();
+  return next({
+    context: {
+      staffRole: till.role,
+      employeeId: till.employeeId!,
+      employeeName: till.employeeName || "",
+      tillRole: till.tillRole || "cashier",
+    },
+  });
+});
+
+export const teamAdminMiddleware = createMiddleware({
+  type: "function",
+}).server(async ({ next }) => {
+  const { requireTeamAdmin } = await import("@/lib/staff.server");
+  const session = await requireTeamAdmin();
+  return next({
+    context: {
+      staffRole: session.role,
+      tillRole: session.tillRole,
+    },
+  });
+});

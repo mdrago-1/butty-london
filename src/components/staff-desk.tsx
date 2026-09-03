@@ -8,6 +8,7 @@ import {
   listStaffTeam,
   setStaffEmployeeActive,
   setStaffEmployeePin,
+  setStaffEmployeeRole,
 } from "@/lib/staff-api";
 import {
   fmtLondonDate,
@@ -15,9 +16,11 @@ import {
   hoursRange,
   pinOk,
   shiftsToCsv,
+  tillRoleLabel,
   type HoursRange,
   type StaffEmployee,
   type StaffShift,
+  type TillRole,
 } from "@/lib/staff";
 
 type RangeKind = "week" | "lastWeek" | "month";
@@ -62,8 +65,9 @@ export function StaffDesk() {
   return (
     <section>
       <p className="mt-0 mb-3 text-sm text-butty-muted">
-        Each person gets a till code. They tap it at the start of a shift and
-        hit End shift when they finish — hours land here.
+        Each person gets a 4-digit till code. They pick their name on the till,
+        enter the code, and land on today's roster. Clock out on the till ends
+        that person's shift — hours land here.
       </p>
 
       <AddEmployee
@@ -142,6 +146,7 @@ function AddEmployee({
 }) {
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
+  const [tillRole, setTillRole] = useState<TillRole>("cashier");
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
@@ -151,14 +156,17 @@ function AddEmployee({
       return;
     }
     if (!pinOk(pin)) {
-      onError("Codes are 4–6 digits.");
+      onError("Codes are 4 digits.");
       return;
     }
     setBusy(true);
     try {
-      await addStaffEmployee({ data: { name: name.trim(), pin } });
+      await addStaffEmployee({
+        data: { name: name.trim(), pin, tillRole },
+      });
       setName("");
       setPin("");
+      setTillRole("cashier");
       onAdded();
     } catch (e) {
       onError(e instanceof Error ? e.message : "Couldn't add them.");
@@ -168,7 +176,7 @@ function AddEmployee({
   };
 
   return (
-    <div className="grid gap-2 rounded-[14px] border-2 border-butty-ink bg-butty-paper p-3 sm:grid-cols-[1fr_8rem_auto]">
+    <div className="grid gap-2 rounded-[14px] border-2 border-butty-ink bg-butty-paper p-3 sm:grid-cols-[1fr_7rem_9rem_auto]">
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
@@ -177,12 +185,21 @@ function AddEmployee({
       />
       <input
         value={pin}
-        onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+        onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
         placeholder="Code"
         inputMode="numeric"
         autoComplete="off"
         style={inpStyle}
       />
+      <select
+        value={tillRole}
+        onChange={(e) => setTillRole(e.target.value as TillRole)}
+        className="h-11 rounded-[10px] border-2 border-butty-ink bg-butty-paper px-2 text-sm font-bold"
+      >
+        <option value="cashier">Cashier</option>
+        <option value="shift_lead">Shift lead</option>
+        <option value="manager">Manager</option>
+      </select>
       <button
         type="button"
         disabled={busy}
@@ -242,6 +259,9 @@ function EmployeeRow({
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-bold">
             {e.name}
+            <span className="ml-1.5 font-semibold text-butty-muted">
+              · {tillRoleLabel(e.tillRole)}
+            </span>
             {!e.active && (
               <span className="ml-1.5 font-semibold text-butty-muted">
                 · off the till
@@ -302,6 +322,27 @@ function EmployeeRow({
                 Clock out
               </button>
             )}
+            {e.active && (
+              <select
+                value={e.tillRole}
+                disabled={busy}
+                onChange={(ev) =>
+                  void run(() =>
+                    setStaffEmployeeRole({
+                      data: {
+                        id: e.id,
+                        tillRole: ev.target.value as TillRole,
+                      },
+                    }),
+                  )
+                }
+                className="h-9 rounded-[10px] border-2 border-butty-ink bg-butty-paper px-2 text-xs font-bold"
+              >
+                <option value="cashier">Cashier</option>
+                <option value="shift_lead">Shift lead</option>
+                <option value="manager">Manager</option>
+              </select>
+            )}
             <button
               type="button"
               disabled={busy}
@@ -323,7 +364,7 @@ function EmployeeRow({
               onSubmit={(ev) => {
                 ev.preventDefault();
                 if (!pinOk(pin)) {
-                  setError("Codes are 4–6 digits.");
+                  setError("Codes are 4 digits.");
                   return;
                 }
                 void run(async () => {
@@ -335,7 +376,7 @@ function EmployeeRow({
               <input
                 value={pin}
                 onChange={(ev) =>
-                  setPin(ev.target.value.replace(/\D/g, "").slice(0, 6))
+                  setPin(ev.target.value.replace(/\D/g, "").slice(0, 4))
                 }
                 placeholder="New code"
                 inputMode="numeric"

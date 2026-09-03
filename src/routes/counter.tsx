@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Counter } from "@/components/counter";
-import { StaffGate } from "@/components/staff-gate";
+import { TillShell } from "@/components/till-shell";
 
 export const Route = createFileRoute("/counter")({
   component: CounterPage,
@@ -11,13 +11,8 @@ export const Route = createFileRoute("/counter")({
 
 function CounterPage() {
   return (
-    <StaffGate
-      role="kitchen"
-      pin
-      title="Counter"
-      hint="Enter your code to open the till and start your shift."
-    >
+    <TillShell>
       <Counter />
-    </StaffGate>
+    </TillShell>
   );
 }

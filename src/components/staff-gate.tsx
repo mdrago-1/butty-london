@@ -51,11 +51,14 @@ export function StaffGate({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const tillIdle = !!session?.till && !session?.employeeId;
   const authed = pin
     ? !!session?.employeeId
-    : eitherStaff
-      ? session?.role === "kitchen" || session?.role === "manager"
-      : session?.role === role;
+    : tillIdle
+      ? false
+      : eitherStaff
+        ? session?.role === "kitchen" || session?.role === "manager"
+        : session?.role === role;
 
   useEffect(() => {
     let live = true;

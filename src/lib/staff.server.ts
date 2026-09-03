@@ -13,18 +13,24 @@ import {
 } from "@tanstack/react-start/server";
 import { getSql } from "@/lib/db";
 import {
+  canForceClockOut,
+  parseTillRole,
   pinOk,
   shiftHours,
+  type ShiftTotals,
   type StaffEmployee,
   type StaffRole,
   type StaffSession,
   type StaffShift,
+  type TillPerson,
+  type TillRole,
 } from "@/lib/staff";
 
-export type { StaffRole, StaffSession };
+export type { StaffRole, StaffSession, ShiftTotals, TillPerson };
 
 const COOKIE = "butty_staff";
 const MAX_AGE = 60 * 60 * 12;
+const TILL_MAX_AGE = 60 * 60 * 24 * 7;
 const PIN_FAIL_WINDOW_MS = 10 * 60 * 1000;
 const PIN_FAIL_LIMIT = 8;
 
@@ -139,12 +145,14 @@ export async function saveStaffPassword(
 export async function signStaffCookie(session: StaffSession): Promise<void> {
   const token = await new SignJWT({
     role: session.role,
+    till: !!session.till,
     employeeId: session.employeeId || "",
     employeeName: session.employeeName || "",
+    tillRole: session.tillRole || "",
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
-    .setExpirationTime("12h")
+    .setExpirationTime(session.till ? "7d" : "12h")
     .sign(secretBytes());
   const secure =
     process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
@@ -152,7 +160,7 @@ export async function signStaffCookie(session: StaffSession): Promise<void> {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
-    maxAge: MAX_AGE,
+    maxAge: session.till ? TILL_MAX_AGE : MAX_AGE,
     secure,
   });
 }
@@ -178,7 +186,15 @@ export async function readStaffSession(): Promise<StaffSession | null> {
       typeof payload.employeeName === "string" && payload.employeeName
         ? payload.employeeName
         : undefined;
-    return { role, employeeId, employeeName };
+    const till = payload.till === true;
+    const tillRole = parseTillRole(payload.tillRole);
+    return {
+      role,
+      till: till || undefined,
+      employeeId,
+      employeeName,
+      tillRole: employeeId ? tillRole : undefined,
+    };
   } catch {
     return null;
   }
@@ -198,6 +214,34 @@ export async function requireStaff(min: StaffRole): Promise<StaffRole> {
     throw new StaffAuthError();
   }
   return role;
+}
+
+export async function requireTillOperator(): Promise<StaffSession> {
+  const s = await readStaffSession();
+  if (!s?.employeeId) throw new StaffAuthError("Clock in on the till first.");
+  const emp = await getEmployee(s.employeeId);
+  if (!emp?.active) throw new StaffAuthError("Clock in on the till first.");
+  const open = await getOpenShift(s.employeeId);
+  if (!open) throw new StaffAuthError("Clock in on the till first.");
+  return {
+    role: "kitchen",
+    till: true,
+    employeeId: emp.id,
+    employeeName: emp.name,
+    tillRole: emp.tillRole,
+    clockInAt: open.clockIn,
+  };
+}
+
+export async function requireTeamAdmin(): Promise<StaffSession> {
+  const s = await readStaffSession();
+  if (!s) throw new StaffAuthError();
+  if (s.role === "manager") return s;
+  if (s.tillRole === "manager" && s.employeeId) {
+    const open = await getOpenShift(s.employeeId);
+    if (open) return { ...s, till: true };
+  }
+  throw new StaffAuthError("Manager sign-in required");
 }
 
 const pinFails = new Map<string, { n: number; at: number }>();
@@ -249,7 +293,7 @@ export async function getOpenShift(
     limit 1
   `;
   const row = rows[0];
-  return row ? { id: row.id, clockIn: String(row.clock_in) } : null;
+  return row ? { id: row.id, clockIn: iso(row.clock_in) } : null;
 }
 
 export async function clockIn(
@@ -266,7 +310,7 @@ export async function clockIn(
       returning id, clock_in
     `;
     const row = rows[0]!;
-    return { id: row.id, clockIn: String(row.clock_in) };
+    return { id: row.id, clockIn: iso(row.clock_in) };
   } catch {
     const again = await getOpenShift(employeeId);
     if (again) return again;
@@ -290,17 +334,97 @@ type EmployeeRow = {
   pin_hash: string;
   pin_key: string;
   active: boolean;
+  job_role?: string;
 };
 
+export async function getEmployee(id: string): Promise<{
+  id: string;
+  name: string;
+  active: boolean;
+  tillRole: TillRole;
+} | null> {
+  const sql = await getSql();
+  const rows = await sql<{
+    id: string;
+    name: string;
+    active: boolean;
+    job_role: string;
+  }>`
+    select id, name, active, job_role
+    from staff_employees
+    where id = ${id}
+    limit 1
+  `;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    active: !!row.active,
+    tillRole: parseTillRole(row.job_role),
+  };
+}
+
+function tillSession(
+  emp: { id: string; name: string; tillRole: TillRole },
+  clockInAt: string,
+): StaffSession {
+  return {
+    role: "kitchen",
+    till: true,
+    employeeId: emp.id,
+    employeeName: emp.name,
+    tillRole: emp.tillRole,
+    clockInAt,
+  };
+}
+
+export async function identifyTill(
+  employeeId: string,
+  pin: string,
+): Promise<StaffSession> {
+  if (!pinOk(pin)) throw new Error("Use a 4-digit code.");
+  if (pinThrottled()) {
+    throw new Error("Too many tries — wait a minute.");
+  }
+  const sql = await getSql();
+  const rows = await sql<EmployeeRow>`
+    select id, name, pin_hash, pin_key, active, job_role
+    from staff_employees
+    where id = ${employeeId} and active = true
+    limit 1
+  `;
+  const row = rows[0];
+  if (
+    !row ||
+    !safeEq(pinKey(pin), row.pin_key) ||
+    !verifyHash(pin, row.pin_hash)
+  ) {
+    recordPinFail();
+    throw new Error("That code didn't match.");
+  }
+  const shift = await clockIn(row.id);
+  const session = tillSession(
+    {
+      id: row.id,
+      name: row.name,
+      tillRole: parseTillRole(row.job_role),
+    },
+    shift.clockIn,
+  );
+  await signStaffCookie(session);
+  return session;
+}
+
 export async function loginWithPin(pin: string): Promise<StaffSession> {
-  if (!pinOk(pin)) throw new Error("Use a 4–6 digit code.");
+  if (!pinOk(pin)) throw new Error("Use a 4-digit code.");
   if (pinThrottled()) {
     throw new Error("Too many tries — wait a minute.");
   }
   const sql = await getSql();
   const key = pinKey(pin);
   const rows = await sql<EmployeeRow>`
-    select id, name, pin_hash, pin_key, active
+    select id, name, pin_hash, pin_key, active, job_role
     from staff_employees
     where pin_key = ${key} and active = true
     limit 1
@@ -310,21 +434,118 @@ export async function loginWithPin(pin: string): Promise<StaffSession> {
     recordPinFail();
     throw new Error("That code didn't match.");
   }
-  const shift = await clockIn(row.id);
-  const session: StaffSession = {
-    role: "kitchen",
-    employeeId: row.id,
-    employeeName: row.name,
-    clockInAt: shift.clockIn,
-  };
-  await signStaffCookie(session);
-  return session;
+  return identifyTill(row.id, pin);
 }
 
-export async function createEmployee(name: string, pin: string): Promise<StaffEmployee> {
+function money(v: unknown): number {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? "0"));
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
+}
+
+async function shiftTotals(
+  employeeId: string,
+  name: string,
+  clockInAt: string,
+  clockOutAt: string,
+): Promise<ShiftTotals> {
+  const sql = await getSql();
+  const stats = await sql<{ n: number; takings: unknown }>`
+    select count(*)::int as n, coalesce(sum(amount_total), 0) as takings
+    from orders
+    where taken_by = ${employeeId}
+      and created_at >= ${clockInAt}
+      and created_at <= ${clockOutAt}
+      and coalesce(voided, false) = false
+  `;
+  return {
+    employeeId,
+    employeeName: name,
+    clockIn: clockInAt,
+    clockOut: clockOutAt,
+    hours: shiftHours(clockInAt, clockOutAt),
+    tickets: Number(stats[0]?.n ?? 0),
+    takings: money(stats[0]?.takings),
+  };
+}
+
+export async function clockOutCurrent(): Promise<ShiftTotals> {
+  const s = await requireTillOperator();
+  const employeeId = s.employeeId!;
+  const open = await getOpenShift(employeeId);
+  if (!open) throw new Error("You are not on shift.");
+  const sql = await getSql();
+  const out = await sql<{ clock_out: string }>`
+    update staff_shifts
+    set clock_out = now()
+    where employee_id = ${employeeId}
+      and clock_out is null
+    returning clock_out
+  `;
+  const clockOutAt = iso(out[0]?.clock_out || new Date());
+  const totals = await shiftTotals(
+    employeeId,
+    s.employeeName || "Staff",
+    open.clockIn,
+    clockOutAt,
+  );
+  await signStaffCookie({ role: "kitchen", till: true });
+  return totals;
+}
+
+export async function forceClockOutEmployee(targetId: string): Promise<void> {
+  const actor = await requireTillOperator();
+  if (targetId === actor.employeeId) {
+    throw new Error("Use Clock out for your own shift.");
+  }
+  const target = await getEmployee(targetId);
+  if (!target) throw new Error("No one with that name.");
+  if (!canForceClockOut(actor.tillRole, target.tillRole)) {
+    throw new Error("You can't clock that person out.");
+  }
+  await clockOut(targetId);
+}
+
+export async function listTillRoster(): Promise<TillPerson[]> {
+  await closeStaleShifts();
+  const sql = await getSql();
+  const people = await sql<{
+    id: string;
+    name: string;
+    job_role: string;
+  }>`
+    select id, name, job_role
+    from staff_employees
+    where active = true
+    order by name asc
+  `;
+  const openRows = await sql<{
+    employee_id: string;
+    clock_in: string;
+  }>`
+    select employee_id, clock_in from staff_shifts where clock_out is null
+  `;
+  const openBy = new Map(openRows.map((r) => [r.employee_id, iso(r.clock_in)]));
+  return people.map((p) => {
+    const clockInAt = openBy.get(p.id) ?? null;
+    return {
+      id: p.id,
+      name: p.name,
+      tillRole: parseTillRole(p.job_role),
+      onShift: !!clockInAt,
+      clockInAt,
+    };
+  });
+}
+
+export async function createEmployee(
+  name: string,
+  pin: string,
+  tillRole: TillRole = "cashier",
+): Promise<StaffEmployee> {
   const n = name.trim().slice(0, 40);
   if (n.length < 2) throw new Error("Need a name.");
-  if (!pinOk(pin)) throw new Error("Codes are 4–6 digits.");
+  if (!pinOk(pin)) throw new Error("Codes are 4 digits.");
+  const role = parseTillRole(tillRole);
   const sql = await getSql();
   const key = pinKey(pin);
   const taken = await sql<{ id: string }>`
@@ -333,8 +554,8 @@ export async function createEmployee(name: string, pin: string): Promise<StaffEm
   if (taken[0]) throw new Error("That code is already in use.");
   const id = crypto.randomUUID();
   await sql`
-    insert into staff_employees (id, name, pin_hash, pin_key, active)
-    values (${id}, ${n}, ${hashPassword(pin)}, ${key}, true)
+    insert into staff_employees (id, name, pin_hash, pin_key, active, job_role)
+    values (${id}, ${n}, ${hashPassword(pin)}, ${key}, true, ${role})
   `;
   return {
     id,
@@ -344,11 +565,12 @@ export async function createEmployee(name: string, pin: string): Promise<StaffEm
     clockInAt: null,
     hoursInRange: 0,
     shiftCount: 0,
+    tillRole: role,
   };
 }
 
 export async function setEmployeePin(id: string, pin: string): Promise<void> {
-  if (!pinOk(pin)) throw new Error("Codes are 4–6 digits.");
+  if (!pinOk(pin)) throw new Error("Codes are 4 digits.");
   const sql = await getSql();
   const key = pinKey(pin);
   const taken = await sql<{ id: string }>`
@@ -362,6 +584,18 @@ export async function setEmployeePin(id: string, pin: string): Promise<void> {
     set pin_hash = ${hashPassword(pin)}, pin_key = ${key}
     where id = ${id}
     returning id
+  `;
+  if (!updated[0]) throw new Error("No one with that name.");
+}
+
+export async function setEmployeeRole(
+  id: string,
+  tillRole: TillRole,
+): Promise<void> {
+  const role = parseTillRole(tillRole);
+  const sql = await getSql();
+  const updated = await sql<{ id: string }>`
+    update staff_employees set job_role = ${role} where id = ${id} returning id
   `;
   if (!updated[0]) throw new Error("No one with that name.");
 }
@@ -410,8 +644,9 @@ export async function listTeam(fromYmd: string, toYmd: string): Promise<{
     id: string;
     name: string;
     active: boolean;
+    job_role: string;
   }>`
-    select id, name, active
+    select id, name, active, job_role
     from staff_employees
     order by active desc, name asc
   `;
@@ -467,6 +702,7 @@ export async function listTeam(fromYmd: string, toYmd: string): Promise<{
       clockInAt,
       hoursInRange: Math.round(agg.hours * 100) / 100,
       shiftCount: agg.n,
+      tillRole: parseTillRole(p.job_role),
     };
   });
   return { employees, shifts };

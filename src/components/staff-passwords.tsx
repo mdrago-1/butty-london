@@ -93,7 +93,7 @@ export function StaffPasswords() {
       <h2 className="m-0 font-display text-base">Staff passwords</h2>
       <p className="mt-1 mb-3 text-[13px] text-butty-muted">
         Kitchen and back office still use these shared passwords. The till
-        uses each person’s own code — set those under Staff.
+        uses each person's name and 4-digit code — no email on the till.
       </p>
       <div className="grid gap-3">
         <PasswordForm role="kitchen" title="Kitchen screen" />

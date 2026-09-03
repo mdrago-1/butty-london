@@ -1,9 +1,15 @@
 export type StaffRole = "kitchen" | "manager";
 
+export type TillRole = "cashier" | "shift_lead" | "manager";
+
+export const TILL_ROLES: TillRole[] = ["cashier", "shift_lead", "manager"];
+
 export type StaffSession = {
   role: StaffRole;
+  till?: boolean;
   employeeId?: string;
   employeeName?: string;
+  tillRole?: TillRole;
   clockInAt?: string | null;
 };
 
@@ -15,6 +21,7 @@ export type StaffEmployee = {
   clockInAt: string | null;
   hoursInRange: number;
   shiftCount: number;
+  tillRole: TillRole;
 };
 
 export type StaffShift = {
@@ -27,12 +34,58 @@ export type StaffShift = {
   open: boolean;
 };
 
+export type TillPerson = {
+  id: string;
+  name: string;
+  tillRole: TillRole;
+  onShift: boolean;
+  clockInAt: string | null;
+};
+
+export type ShiftTotals = {
+  employeeId: string;
+  employeeName: string;
+  clockIn: string;
+  clockOut: string;
+  hours: number;
+  tickets: number;
+  takings: number;
+};
+
+export function parseTillRole(v: unknown): TillRole {
+  if (v === "shift_lead" || v === "manager" || v === "cashier") return v;
+  return "cashier";
+}
+
+export function tillRoleLabel(role: TillRole): string {
+  if (role === "shift_lead") return "Shift lead";
+  if (role === "manager") return "Manager";
+  return "Cashier";
+}
+
+export function canManageTeam(role?: TillRole | null): boolean {
+  return role === "manager";
+}
+
+export function canVoidTickets(role?: TillRole | null): boolean {
+  return role === "manager";
+}
+
+export function canForceClockOut(
+  actor?: TillRole | null,
+  target?: TillRole | null,
+): boolean {
+  if (actor === "manager") return true;
+  if (actor === "shift_lead" && (target ?? "cashier") === "cashier") return true;
+  return false;
+}
+
 export function normalizePin(raw: string): string {
-  return String(raw || "").replace(/\D/g, "").slice(0, 6);
+  return String(raw || "").replace(/\D/g, "").slice(0, 4);
 }
 
 export function pinOk(pin: string): boolean {
-  return /^\d{4,6}$/.test(pin);
+  return /^\d{4}$/.test(pin);
 }
 
 /** Decimal hours, 2 places. */

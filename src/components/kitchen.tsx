@@ -9,9 +9,10 @@ export function Kitchen() {
   const markCollected = useShop((s) => s.markCollected);
 
   const READY = STAGES.length - 1;
-  const inProgress = orders.filter((o) => o.stage < READY && !o.collected);
-  const readyWaiting = orders.filter((o) => o.stage === READY && !o.collected);
-  const collected = orders.filter((o) => o.collected);
+  const live = orders.filter((o) => !o.collected && !o.voided);
+  const inProgress = live.filter((o) => o.stage < READY);
+  const readyWaiting = live.filter((o) => o.stage === READY);
+  const collected = orders.filter((o) => o.collected && !o.voided);
 
   return (
     <div className="mx-auto min-h-full max-w-[900px] px-4 py-5 pb-10">
@@ -117,7 +118,9 @@ function ReadyCard({
           <div className="text-[13px] font-semibold text-white/90">
             {o.name} ·{" "}
             {o.source === "counter"
-              ? "Counter"
+              ? o.takenByName
+                ? `Till · ${o.takenByName}`
+                : "Till"
               : o.collectTime === "asap"
                 ? "ASAP"
                 : o.collectTime}
@@ -190,7 +193,9 @@ function MakingCard({
           <div className="text-[12.5px] text-butty-cream/80">
             {o.name} ·{" "}
             {o.source === "counter"
-              ? "Counter"
+              ? o.takenByName
+                ? `Till · ${o.takenByName}`
+                : "Till"
               : o.collectTime === "asap"
                 ? "ASAP"
                 : o.collectTime}

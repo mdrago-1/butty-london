@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import {
   Check,
-  ChefHat,
   Leaf,
   Minus,
   Plus,
@@ -165,12 +164,6 @@ export function Counter() {
           <div>
             <div className="flex flex-wrap items-center gap-3">
               <h1 className="m-0 font-display text-2xl leading-none">Counter</h1>
-              <a
-                href="/kitchen"
-                className="flex h-9 items-center gap-1.5 rounded-full border-2 border-butty-ink bg-butty-paper px-3 text-xs font-bold text-butty-ink no-underline"
-              >
-                <ChefHat size={14} /> Kitchen
-              </a>
             </div>
             <p className="mt-1.5 mb-0 text-sm text-butty-muted">
               Tap to add. Take payment, then send the ticket.
