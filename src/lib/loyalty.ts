@@ -26,6 +26,7 @@ export type LoyaltyEvent = {
 export type LoyaltyProfile = {
   displayName: string;
   email: string | null;
+  phone: string | null;
   optedIn: boolean;
   stamps: number;
   card: number;
@@ -39,6 +40,7 @@ export type ClubMember = {
   userId: string;
   displayName: string;
   email: string | null;
+  phone: string | null;
   stamps: number;
   card: number;
   canRedeem: boolean;

@@ -37,6 +37,7 @@ export type Order = {
   collectedAt?: number;
   pointsEarned?: number;
   discountGbp?: number;
+  source?: "app" | "counter";
 };
 
 export type Account = {

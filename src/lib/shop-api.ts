@@ -54,6 +54,7 @@ type OrderRow = {
   created_at: string;
   points_earned?: unknown;
   discount_gbp?: unknown;
+  source?: string;
 };
 
 type LineRow = {
@@ -104,6 +105,7 @@ function rowToOrder(o: OrderRow, lines: LineRow[]): Order {
     })),
     pointsEarned: num(o.points_earned),
     discountGbp: num(o.discount_gbp),
+    source: o.source === "counter" ? "counter" : "app",
   };
 }
 
@@ -131,7 +133,8 @@ export const getShopSnapshot = createServerFn({ method: "GET" }).handler(
     }>`select online_orders, specials_on, renovating from shop_settings where id = 1`;
     const orderRows = await sql<OrderRow>`
       select id, order_no, ticket_name, collect_time, stage, collected,
-             collected_at, paid, created_at, points_earned, discount_gbp
+             collected_at, paid, created_at, points_earned, discount_gbp,
+             coalesce(source, 'app') as source
       from orders
       where paid = true
         and (collected = false or created_at > now() - interval '2 days')
@@ -338,6 +341,186 @@ export const placeShopOrder = createServerFn({ method: "POST" })
     const created = await sql<OrderRow>`
       select id, order_no, ticket_name, collect_time, stage, collected,
              collected_at, paid, created_at, points_earned, discount_gbp
+      from orders where id = ${id}
+    `;
+    const createdLines = await sql<LineRow>`
+      select order_id, item_id, name, qty, unit_price, line_price, mods
+      from order_lines where order_id = ${id}
+    `;
+    return rowToOrder(created[0]!, createdLines);
+  });
+
+export const placeCounterOrder = createServerFn({ method: "POST" })
+  .middleware([kitchenMiddleware])
+  .validator(
+    (input: {
+      lines: OrderLine[];
+      name: string;
+      memberUserId?: string | null;
+      redeemReward?: boolean;
+    }) => input,
+  )
+  .handler(async ({ data }): Promise<Order> => {
+    const sql = await getSql();
+    const lines = Array.isArray(data.lines) ? data.lines : [];
+    if (lines.length === 0) throw new Error("Empty order");
+    const ticket = (data.name || "Walk-in").trim().slice(0, 40) || "Walk-in";
+    const userId = (data.memberUserId || "").trim() || undefined;
+
+    if (userId) {
+      const club = await sql<{ user_id: string; loyalty_opted_in: boolean }>`
+        select user_id, loyalty_opted_in from customer_profiles
+        where user_id = ${userId}
+      `;
+      if (!club[0]) throw new Error("That club card wasn't found.");
+    }
+
+    const ids = [...new Set(lines.map((l) => l.itemId).filter(Boolean))];
+    if (ids.length === 0) throw new Error("Empty order");
+    const ph = ids.map((_, i) => `$${i + 1}`).join(",");
+    const items = await sql.query<MenuRow>(
+      `select id, name, price, extras, sold_out, section from menu_items where id in (${ph})`,
+      ids,
+    );
+    const byId = new Map(items.map((i) => [i.id, i]));
+
+    const priced = lines.map((l) => {
+      const item = byId.get(l.itemId);
+      if (!item) throw new Error(`Unknown item ${l.itemId}`);
+      if (item.sold_out) throw new Error(`${item.name} is sold out`);
+      const extras = asJson<Extra[]>(item.extras, []);
+      let unit = num(item.price);
+      const mods = Array.isArray(l.mods) ? l.mods : [];
+      for (const m of mods) {
+        if (m.startsWith("+ ")) {
+          const ex = extras.find((e) => `+ ${e.n}` === m);
+          if (ex) unit += num(ex.p);
+        }
+      }
+      const qty = Math.max(1, Math.min(20, Math.round(num(l.qty) || 1)));
+      return {
+        itemId: item.id,
+        name: item.name,
+        qty,
+        unit,
+        linePrice: Math.round(unit * qty * 100) / 100,
+        mods,
+      };
+    });
+
+    const subtotal = priced.reduce((s, l) => s + l.linePrice, 0);
+    let discount = 0;
+    let redeemed = false;
+    let sandwichQty = 0;
+    for (const l of priced) {
+      const item = byId.get(l.itemId);
+      if (item && isSandwichSection(item.section)) sandwichQty += l.qty;
+    }
+
+    if (data.redeemReward && userId && sandwichQty > 0) {
+      const taken = await sql<{ user_id: string }>`
+        update customer_profiles
+        set stamps_balance = stamps_balance - ${STAMPS_FOR_REWARD}
+        where user_id = ${userId}
+          and loyalty_opted_in = true
+          and stamps_balance >= ${STAMPS_FOR_REWARD}
+        returning user_id
+      `;
+      if (taken.length > 0) {
+        let best = 0;
+        for (const l of priced) {
+          const item = byId.get(l.itemId);
+          if (item && isSandwichSection(item.section)) {
+            best = Math.max(best, l.unit);
+          }
+        }
+        discount = best;
+        redeemed = true;
+      }
+    }
+
+    const amount = Math.round((subtotal - discount) * 100) / 100;
+    let earned = 0;
+
+    const maxRows = await sql<{ n: unknown }>`
+      select coalesce(max(order_no), 346) as n from orders
+    `;
+    let no = Math.round(num(maxRows[0]?.n)) + 1;
+    if (no > 999) no = 100;
+    const id = crypto.randomUUID();
+
+    try {
+      if (userId) {
+        const club = await sql<{ loyalty_opted_in: boolean }>`
+          select loyalty_opted_in from customer_profiles where user_id = ${userId}
+        `;
+        if (club[0]?.loyalty_opted_in) {
+          earned = Math.max(0, sandwichQty - (redeemed ? 1 : 0));
+        }
+      }
+
+      await sql`
+        insert into orders
+          (id, order_no, ticket_name, collect_time, stage, paid, amount_total,
+           user_id, points_earned, discount_gbp, source)
+        values
+          (${id}, ${no}, ${ticket}, ${"now"}, 0, true, ${amount},
+           ${userId ?? null}, ${earned}, ${discount}, ${"counter"})
+      `;
+      for (const l of priced) {
+        await sql.query(
+          `insert into order_lines (order_id, item_id, name, qty, unit_price, line_price, mods)
+           values ($1,$2,$3,$4,$5,$6,$7::jsonb)`,
+          [
+            id,
+            l.itemId,
+            l.name,
+            l.qty,
+            l.unit,
+            l.linePrice,
+            JSON.stringify(l.mods),
+          ],
+        );
+      }
+
+      if (userId && redeemed) {
+        await sql`
+          insert into loyalty_events (user_id, kind, points, order_id, note)
+          values (
+            ${userId}, 'redeem', ${-STAMPS_FOR_REWARD}, ${id},
+            ${`Redeemed a free sandwich on #${no} (counter)`}
+          )
+        `;
+      }
+      if (userId && earned > 0) {
+        await sql`
+          update customer_profiles
+          set stamps_balance = stamps_balance + ${earned}
+          where user_id = ${userId} and loyalty_opted_in = true
+        `;
+        await sql`
+          insert into loyalty_events (user_id, kind, points, order_id, note)
+          values (
+            ${userId}, 'earn', ${earned}, ${id},
+            ${`+${earned} stamp${earned === 1 ? "" : "s"} on order #${no} (counter)`}
+          )
+        `;
+      }
+    } catch (err) {
+      if (redeemed && userId) {
+        await sql`
+          update customer_profiles
+          set stamps_balance = stamps_balance + ${STAMPS_FOR_REWARD}
+          where user_id = ${userId}
+        `;
+      }
+      throw err;
+    }
+
+    const created = await sql<OrderRow>`
+      select id, order_no, ticket_name, collect_time, stage, collected,
+             collected_at, paid, created_at, points_earned, discount_gbp,
+             coalesce(source, 'app') as source
       from orders where id = ${id}
     `;
     const createdLines = await sql<LineRow>`

@@ -65,7 +65,7 @@ export function Manager() {
   }
 
   return (
-    <div className="mx-auto min-h-dvh max-w-[760px] px-4 py-5 pt-14 pb-10">
+    <div className="mx-auto min-h-full max-w-[760px] px-4 py-5 pb-10">
       <div className="mb-4 flex items-center gap-2.5">
         <Settings size={22} />
         <h1 className="m-0 font-display text-[22px]">Back office</h1>
@@ -93,6 +93,18 @@ export function Manager() {
 
       {tab === "shop" && (
         <>
+          <a
+            href="/counter"
+            className="mb-4 flex items-center justify-between rounded-[14px] border-2 border-butty-ink bg-butty-paper px-4 py-3.5 text-inherit no-underline"
+          >
+            <div>
+              <div className="font-bold">Counter till</div>
+              <div className="text-sm text-butty-muted">
+                Walk-in orders, big buttons, club cards
+              </div>
+            </div>
+            <span className="text-sm font-bold">Open →</span>
+          </a>
           <div className="mb-[22px] grid gap-2.5">
             <ToggleRow
               icon={HardHat}

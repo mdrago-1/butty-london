@@ -7,6 +7,7 @@ import { hasGateSessionMarker } from "@/lib/auth/gate-session-marker";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/cn";
 import { fmtDate } from "@/lib/format";
+import { saveClubPhone } from "@/lib/loyalty-api";
 import type { LoyaltyProfile } from "@/lib/loyalty";
 import type { Order, OrderLine } from "@/lib/types";
 
@@ -36,6 +37,8 @@ export function AccountScreen({
   const [name, setName] = useState(
     profile?.displayName || user?.displayName || "",
   );
+  const [phone, setPhone] = useState(profile?.phone || "");
+  const [phoneMsg, setPhoneMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const gateSession = useSyncExternalStore(
@@ -67,6 +70,19 @@ export function AccountScreen({
     setBusy(true);
     try {
       await onSaveName(name.trim());
+    } finally {
+      setBusy(false);
+    }
+  };
+  const savePhone = async () => {
+    setBusy(true);
+    setPhoneMsg(null);
+    try {
+      const next = await saveClubPhone({ data: { phone } });
+      setPhone(next.phone || "");
+      setPhoneMsg("Saved — staff can find you at the counter with this number.");
+    } catch (e) {
+      setPhoneMsg(e instanceof Error ? e.message : "Couldn't save that number.");
     } finally {
       setBusy(false);
     }
@@ -133,6 +149,33 @@ export function AccountScreen({
             Save
           </button>
         </div>
+
+        <SubHead>Mobile for the counter</SubHead>
+        <p className="mt-0 mb-2 text-[13px] text-butty-muted">
+          Give this to staff if you order at the till, so stamps go on your
+          card.
+        </p>
+        <div className="flex gap-2">
+          <input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="07…"
+            inputMode="tel"
+            autoComplete="tel"
+            style={inpStyle}
+          />
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void savePhone()}
+            className="shrink-0 rounded-[10px] border-2 border-butty-ink bg-butty-yellow px-3 text-sm font-bold"
+          >
+            Save
+          </button>
+        </div>
+        {phoneMsg && (
+          <p className="mt-2 mb-0 text-[13px] font-semibold">{phoneMsg}</p>
+        )}
 
         <div className="mt-6 rounded-[18px] border-[3px] border-butty-ink bg-butty-paper p-4">
           <div className="font-display text-lg leading-none">The Butty Club</div>

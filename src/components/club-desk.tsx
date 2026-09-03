@@ -59,7 +59,7 @@ export function ClubDesk() {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search name or email"
+            placeholder="Search name, phone or email"
             style={{ ...inpStyle, paddingLeft: 34 }}
           />
         </div>
@@ -75,8 +75,8 @@ export function ClubDesk() {
       )}
       {members.length === 0 ? (
         <div className="rounded-[14px] border-2 border-dashed border-butty-ink bg-butty-paper px-6 py-8 text-center text-sm text-butty-muted">
-          No club members yet. They appear here when someone signs in on the
-          customer app.
+          No club members yet. They appear when someone joins on the app or
+          at the till.
         </div>
       ) : (
         <div className="overflow-hidden rounded-[14px] border-2 border-butty-ink bg-butty-paper">
@@ -98,7 +98,7 @@ export function ClubDesk() {
                   )}
                 </div>
                 <div className="truncate text-xs text-butty-muted">
-                  {m.email || "No email"}
+                  {m.phone || m.email || "No email"}
                 </div>
               </div>
               <div

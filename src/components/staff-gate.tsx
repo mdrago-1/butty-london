@@ -23,11 +23,13 @@ export function StaffGate({
   title,
   hint,
   children,
+  eitherStaff = false,
 }: {
   role: StaffRole;
   title: string;
   hint: string;
   children: ReactNode;
+  eitherStaff?: boolean;
 }) {
   const [ready, setReady] = useState(false);
   const [authed, setAuthed] = useState(false);
@@ -39,18 +41,32 @@ export function StaffGate({
     let live = true;
     void getStaffSession().then((s) => {
       if (!live) return;
-      setAuthed(s?.role === role);
+      setAuthed(
+        eitherStaff
+          ? s?.role === "kitchen" || s?.role === "manager"
+          : s?.role === role,
+      );
       setReady(true);
     });
     return () => {
       live = false;
     };
-  }, [role]);
+  }, [role, eitherStaff]);
 
   const submit = async () => {
     setError(null);
     setBusy(true);
     try {
+      if (eitherStaff) {
+        try {
+          await staffLogin({ data: { role: "kitchen", password } });
+        } catch {
+          await staffLogin({ data: { role: "manager", password } });
+        }
+        setAuthed(true);
+        setPassword("");
+        return;
+      }
       const s = await staffLogin({ data: { role, password } });
       if (s.role !== role) throw new Error("Wrong screen for that login.");
       setAuthed(true);
@@ -113,15 +129,19 @@ export function StaffGate({
   }
 
   return (
-    <div className="relative min-h-dvh bg-butty-yellow font-sans text-butty-ink">
-      <button
-        type="button"
-        onClick={() => void signOut()}
-        className="absolute top-3 right-3 z-10 flex items-center gap-1.5 rounded-full border-2 border-butty-ink bg-butty-paper px-3 py-1.5 text-xs font-bold"
-      >
-        <LogOut size={13} /> Sign out
-      </button>
-      <ShopLive>{children}</ShopLive>
+    <div className="flex min-h-dvh flex-col bg-butty-yellow font-sans text-butty-ink">
+      <div className="flex shrink-0 justify-end px-3 py-2">
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          className="flex items-center gap-1.5 rounded-full border-2 border-butty-ink bg-butty-paper px-3 py-1.5 text-xs font-bold"
+        >
+          <LogOut size={13} /> Sign out
+        </button>
+      </div>
+      <div className="min-h-0 flex-1">
+        <ShopLive>{children}</ShopLive>
+      </div>
     </div>
   );
 }

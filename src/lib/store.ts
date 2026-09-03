@@ -12,6 +12,7 @@ import {
   deleteMenuItem as apiDeleteItem,
   getShopSnapshot,
   markOrderCollected,
+  placeCounterOrder as apiPlaceCounter,
   placeShopOrder,
   setOrderStage,
   setShopFlags,
@@ -49,6 +50,12 @@ type ShopState = {
   setClubOptIn: (optedIn: boolean, displayName?: string) => Promise<void>;
   saveName: (displayName: string) => Promise<void>;
   placeOrder: (o: PlaceInput) => Promise<number>;
+  placeCounterOrder: (o: {
+    lines: OrderLine[];
+    name: string;
+    memberUserId?: string | null;
+    redeemReward?: boolean;
+  }) => Promise<number>;
   setStage: (no: number, stage: number) => Promise<void>;
   markCollected: (no: number) => Promise<void>;
   upsertItem: (item: MenuItem) => Promise<void>;
@@ -134,6 +141,21 @@ export const useShop = create<ShopState>()(
         });
         await get().refresh();
         await get().refreshAccount();
+        return order.no;
+      },
+      placeCounterOrder: async (o) => {
+        const order = await apiPlaceCounter({
+          data: {
+            lines: o.lines,
+            name: o.name,
+            memberUserId: o.memberUserId,
+            redeemReward: o.redeemReward,
+          },
+        });
+        set({
+          orders: [order, ...get().orders.filter((x) => x.no !== order.no)],
+        });
+        await get().refresh();
         return order.no;
       },
       setStage: async (no, stage) => {

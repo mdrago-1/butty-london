@@ -7,7 +7,8 @@ import {
   type LoyaltyEvent,
   type LoyaltyProfile,
 } from "@/lib/loyalty";
-import { managerMiddleware } from "@/lib/staff-middleware";
+import { kitchenMiddleware, managerMiddleware } from "@/lib/staff-middleware";
+import { displayPhone, normalizePhone, phoneDigits } from "@/lib/phone";
 import type { Order, OrderLine } from "@/lib/types";
 
 function num(v: unknown): number {
@@ -34,6 +35,7 @@ type ProfileRow = {
   display_name: string;
   loyalty_opted_in: boolean;
   stamps_balance: unknown;
+  phone: string | null;
 };
 
 type EventRow = {
@@ -63,7 +65,7 @@ async function readProfile(sql: Sql, userId: string): Promise<LoyaltyProfile> {
   const authUser = await loadAuthUser(sql, userId);
   await ensureProfile(sql, userId, authUser.name || "");
   const rows = await sql<ProfileRow>`
-    select display_name, loyalty_opted_in, stamps_balance
+    select display_name, loyalty_opted_in, stamps_balance, phone
     from customer_profiles where user_id = ${userId}
   `;
   const row = rows[0];
@@ -86,6 +88,7 @@ async function readProfile(sql: Sql, userId: string): Promise<LoyaltyProfile> {
   return {
     displayName: (row?.display_name || authUser.name || "").trim(),
     email: authUser.email,
+    phone: row?.phone ? displayPhone(row.phone) : null,
     optedIn: !!row?.loyalty_opted_in,
     stamps: progress.stamps,
     card: progress.card,
@@ -237,49 +240,195 @@ type MemberRow = {
   display_name: string;
   stamps_balance: unknown;
   loyalty_opted_in: boolean;
+  phone: string | null;
   email: string | null;
   auth_name: string | null;
 };
 
+function toMember(r: MemberRow): ClubMember {
+  const progress = stampProgress(num(r.stamps_balance));
+  return {
+    userId: r.user_id,
+    displayName: (r.display_name || r.auth_name || "Guest").trim(),
+    email: r.email,
+    phone: r.phone ? displayPhone(r.phone) : null,
+    stamps: progress.stamps,
+    card: progress.card,
+    canRedeem: progress.canRedeem,
+    optedIn: !!r.loyalty_opted_in,
+  };
+}
+
+/** If this phone belongs to a walk-in till card, fold those stamps into the app account. */
+async function claimPhone(sql: Sql, userId: string, phone: string) {
+  const taken = await sql<{ user_id: string; stamps_balance: unknown }>`
+    select user_id, stamps_balance from customer_profiles
+    where phone = ${phone} and user_id <> ${userId}
+    limit 1
+  `;
+  const other = taken[0];
+  if (!other) {
+    await sql`
+      update customer_profiles
+      set phone = ${phone}
+      where user_id = ${userId}
+    `;
+    return;
+  }
+  if (!other.user_id.startsWith("walkin:")) {
+    throw new Error("That number is already on a club card.");
+  }
+  const walkinId = other.user_id;
+  const extra = num(other.stamps_balance);
+  await sql`update customer_profiles set phone = '' where user_id = ${walkinId}`;
+  await sql`
+    update customer_profiles
+    set phone = ${phone},
+        loyalty_opted_in = true,
+        loyalty_opted_in_at = coalesce(loyalty_opted_in_at, now()),
+        stamps_balance = stamps_balance + ${extra}
+    where user_id = ${userId}
+  `;
+  await sql`update loyalty_events set user_id = ${userId} where user_id = ${walkinId}`;
+  await sql`update orders set user_id = ${userId} where user_id = ${walkinId}`;
+  await sql`delete from customer_profiles where user_id = ${walkinId}`;
+  await sql`
+    insert into loyalty_events (user_id, kind, points, note)
+    values (
+      ${userId},
+      'adjust',
+      ${extra},
+      ${
+        extra > 0
+          ? `Merged ${extra} stamp${extra === 1 ? "" : "s"} from the counter card`
+          : "Merged counter club card"
+      }
+    )
+  `;
+}
+
 export const listClubMembers = createServerFn({ method: "POST" })
-  .middleware([managerMiddleware])
+  .middleware([kitchenMiddleware])
   .validator((input: { q?: string }) => input)
   .handler(async ({ data }): Promise<ClubMember[]> => {
     const sql = await getSql();
     const q = (data.q || "").trim();
     const like = `%${q}%`;
+    const digits = phoneDigits(q);
+    const digitLike = digits ? `%${digits}%` : "";
     const rows = q
       ? await sql<MemberRow>`
           select p.user_id, p.display_name, p.stamps_balance, p.loyalty_opted_in,
-                 u.email as email, u.name as auth_name
+                 p.phone, u.email as email, u.name as auth_name
           from customer_profiles p
           left join "user" u on u.id = p.user_id
           where p.display_name ilike ${like}
              or coalesce(u.email, '') ilike ${like}
              or coalesce(u.name, '') ilike ${like}
+             or coalesce(p.phone, '') ilike ${like}
+             or (${digits} <> '' and coalesce(p.phone, '') like ${digitLike})
           order by p.display_name asc
           limit 40
         `
       : await sql<MemberRow>`
           select p.user_id, p.display_name, p.stamps_balance, p.loyalty_opted_in,
-                 u.email as email, u.name as auth_name
+                 p.phone, u.email as email, u.name as auth_name
           from customer_profiles p
           left join "user" u on u.id = p.user_id
           order by p.created_at desc, p.display_name asc
           limit 40
         `;
-    return rows.map((r) => {
-      const progress = stampProgress(num(r.stamps_balance));
-      return {
-        userId: r.user_id,
-        displayName: (r.display_name || r.auth_name || "Guest").trim(),
-        email: r.email,
-        stamps: progress.stamps,
-        card: progress.card,
-        canRedeem: progress.canRedeem,
-        optedIn: !!r.loyalty_opted_in,
-      };
-    });
+    return rows.map(toMember);
+  });
+
+export const findClubMember = createServerFn({ method: "POST" })
+  .middleware([kitchenMiddleware])
+  .validator((input: { q: string }) => input)
+  .handler(async ({ data }): Promise<ClubMember[]> => {
+    const q = (data.q || "").trim();
+    if (q.length < 2) return [];
+    const sql = await getSql();
+    const like = `%${q}%`;
+    const phone = normalizePhone(q);
+    const digits = phoneDigits(q);
+    const digitLike = digits.length >= 6 ? `%${digits}%` : "";
+    const rows = await sql<MemberRow>`
+      select p.user_id, p.display_name, p.stamps_balance, p.loyalty_opted_in,
+             p.phone, u.email as email, u.name as auth_name
+      from customer_profiles p
+      left join "user" u on u.id = p.user_id
+      where p.display_name ilike ${like}
+         or coalesce(u.email, '') ilike ${like}
+         or coalesce(u.name, '') ilike ${like}
+         or (${phone} <> '' and p.phone = ${phone})
+         or (${digitLike} <> '' and coalesce(p.phone, '') like ${digitLike})
+      order by
+        case when ${phone} <> '' and p.phone = ${phone} then 0 else 1 end,
+        p.display_name asc
+      limit 12
+    `;
+    return rows.map(toMember);
+  });
+
+export const enrolWalkInMember = createServerFn({ method: "POST" })
+  .middleware([kitchenMiddleware])
+  .validator((input: { name: string; phone: string }) => input)
+  .handler(async ({ data }): Promise<ClubMember> => {
+    const name = (data.name || "").trim().slice(0, 40);
+    const phone = normalizePhone(data.phone);
+    if (name.length < 2) throw new Error("Need a name for the ticket.");
+    if (phone.length < 11) throw new Error("Need a UK mobile number.");
+    const sql = await getSql();
+    const existing = await sql<MemberRow>`
+      select p.user_id, p.display_name, p.stamps_balance, p.loyalty_opted_in,
+             p.phone, u.email as email, u.name as auth_name
+      from customer_profiles p
+      left join "user" u on u.id = p.user_id
+      where p.phone = ${phone}
+      limit 1
+    `;
+    if (existing[0]) return toMember(existing[0]);
+    const userId = `walkin:${phone}`;
+    await sql`
+      insert into customer_profiles
+        (user_id, display_name, phone, loyalty_opted_in, loyalty_opted_in_at)
+      values (${userId}, ${name}, ${phone}, true, now())
+    `;
+    await sql`
+      insert into loyalty_events (user_id, kind, points, note)
+      values (${userId}, 'opt_in', 0, 'Joined the Butty Club at the counter')
+    `;
+    const created = await sql<MemberRow>`
+      select p.user_id, p.display_name, p.stamps_balance, p.loyalty_opted_in,
+             p.phone, u.email as email, u.name as auth_name
+      from customer_profiles p
+      left join "user" u on u.id = p.user_id
+      where p.user_id = ${userId}
+    `;
+    return toMember(created[0]!);
+  });
+
+export const saveClubPhone = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: { phone: string }) => input)
+  .handler(async ({ context, data }): Promise<LoyaltyProfile> => {
+    const sql = await getSql();
+    const authUser = await loadAuthUser(sql, context.userId);
+    await ensureProfile(sql, context.userId, authUser.name || "");
+    const phone = normalizePhone(data.phone);
+    if (phone && phone.length < 11) {
+      throw new Error("That doesn't look like a UK mobile.");
+    }
+    if (phone) {
+      await claimPhone(sql, context.userId, phone);
+    } else {
+      await sql`
+        update customer_profiles
+        set phone = ''
+        where user_id = ${context.userId}
+      `;
+    }
+    return readProfile(sql, context.userId);
   });
 
 export const adjustClubStamps = createServerFn({ method: "POST" })
@@ -302,7 +451,7 @@ export const adjustClubStamps = createServerFn({ method: "POST" })
       update customer_profiles
       set stamps_balance = greatest(0, stamps_balance + ${delta})
       where user_id = ${userId}
-      returning user_id, display_name, loyalty_opted_in, stamps_balance
+      returning user_id, display_name, loyalty_opted_in, stamps_balance, phone
     `;
     if (!updated[0]) throw new Error("No club member with that account.");
     await sql`
@@ -315,6 +464,7 @@ export const adjustClubStamps = createServerFn({ method: "POST" })
       userId,
       displayName: (updated[0].display_name || authUser.name || "Guest").trim(),
       email: authUser.email,
+      phone: updated[0].phone ? displayPhone(updated[0].phone) : null,
       stamps: progress.stamps,
       card: progress.card,
       canRedeem: progress.canRedeem,

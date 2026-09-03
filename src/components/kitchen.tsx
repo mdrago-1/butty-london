@@ -1,4 +1,4 @@
-import { Bell, ChefHat } from "lucide-react";
+import { Bell, ChefHat, Store } from "lucide-react";
 import { STAGES } from "@/lib/stages";
 import { useShop } from "@/lib/store";
 import type { Order } from "@/lib/types";
@@ -14,10 +14,16 @@ export function Kitchen() {
   const collected = orders.filter((o) => o.collected);
 
   return (
-    <div className="mx-auto min-h-dvh max-w-[900px] px-4 py-5 pt-14 pb-10">
+    <div className="mx-auto min-h-full max-w-[900px] px-4 py-5 pb-10">
       <div className="mb-1 flex items-center gap-2.5">
         <ChefHat size={22} />
         <h1 className="m-0 font-display text-[22px]">Kitchen</h1>
+        <a
+          href="/counter"
+          className="flex h-9 items-center gap-1.5 rounded-full border-2 border-butty-ink bg-butty-paper px-3 text-xs font-bold text-butty-ink no-underline"
+        >
+          <Store size={13} /> Till
+        </a>
         <span className="ml-auto flex gap-1.5">
           <span className="rounded-full bg-butty-ink px-3 py-1 text-[13px] font-bold text-butty-cream">
             {inProgress.length} making
@@ -109,7 +115,12 @@ function ReadyCard({
         <div>
           <div className="font-display text-2xl text-white">#{o.no}</div>
           <div className="text-[13px] font-semibold text-white/90">
-            {o.name} · {o.collectTime === "asap" ? "ASAP" : o.collectTime}
+            {o.name} ·{" "}
+            {o.source === "counter"
+              ? "Counter"
+              : o.collectTime === "asap"
+                ? "ASAP"
+                : o.collectTime}
           </div>
         </div>
         <div className="rounded-full bg-white px-[11px] py-[5px] text-xs font-bold text-butty-green">
@@ -177,7 +188,12 @@ function MakingCard({
             #{o.no}
           </div>
           <div className="text-[12.5px] text-butty-cream/80">
-            {o.name} · {o.collectTime === "asap" ? "ASAP" : o.collectTime}
+            {o.name} ·{" "}
+            {o.source === "counter"
+              ? "Counter"
+              : o.collectTime === "asap"
+                ? "ASAP"
+                : o.collectTime}
           </div>
         </div>
         <div
