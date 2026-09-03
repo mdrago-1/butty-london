@@ -92,8 +92,8 @@ export function StaffPasswords() {
     <section className="mt-8">
       <h2 className="m-0 font-display text-base">Staff passwords</h2>
       <p className="mt-1 mb-3 text-[13px] text-butty-muted">
-        Kitchen and back office use different passwords. Change them here any
-        time.
+        Kitchen and back office still use these shared passwords. The till
+        uses each person’s own code — set those under Staff.
       </p>
       <div className="grid gap-3">
         <PasswordForm role="kitchen" title="Kitchen screen" />

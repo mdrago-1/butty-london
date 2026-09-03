@@ -13,9 +13,9 @@ function CounterPage() {
   return (
     <StaffGate
       role="kitchen"
-      eitherStaff
+      pin
       title="Counter"
-      hint="Till for walk-in orders. Kitchen or office password."
+      hint="Enter your code to open the till and start your shift."
     >
       <Counter />
     </StaffGate>

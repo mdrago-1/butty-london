@@ -9,11 +9,13 @@ import {
   Star,
   Store,
   Trash2,
+  Users,
   UtensilsCrossed,
   type LucideIcon,
 } from "lucide-react";
 import { Chip, Field, inpStyle, ScreenHead } from "@/components/bits";
 import { ClubDesk } from "@/components/club-desk";
+import { StaffDesk } from "@/components/staff-desk";
 import { StaffPasswords } from "@/components/staff-passwords";
 import { cn } from "@/lib/cn";
 import { fmtHour, hourOpts } from "@/lib/format";
@@ -21,11 +23,12 @@ import { ALLERGENS, CLOSE, SECTION_ORDER } from "@/lib/menu";
 import { useShop } from "@/lib/store";
 import type { Extra, MenuItem } from "@/lib/types";
 
-type OfficeTab = "menu" | "loyalty" | "shop";
+type OfficeTab = "menu" | "loyalty" | "staff" | "shop";
 
 const TABS: [OfficeTab, string, LucideIcon][] = [
   ["menu", "Menu", UtensilsCrossed],
   ["loyalty", "Loyalty", Star],
+  ["staff", "Staff", Users],
   ["shop", "Shop", Settings],
 ];
 
@@ -91,6 +94,8 @@ export function Manager() {
 
       {tab === "loyalty" && <ClubDesk />}
 
+      {tab === "staff" && <StaffDesk />}
+
       {tab === "shop" && (
         <>
           <a
@@ -100,7 +105,7 @@ export function Manager() {
             <div>
               <div className="font-bold">Counter till</div>
               <div className="text-sm text-butty-muted">
-                Walk-in orders, big buttons, club cards
+                Walk-in orders — staff sign in with their own code
               </div>
             </div>
             <span className="text-sm font-bold">Open →</span>
