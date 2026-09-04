@@ -42,6 +42,7 @@ export const getStaffSession = createServerFn({ method: "GET" }).handler(
         till: s.till,
         employeeId: emp.id,
         employeeName: emp.name,
+        staffCode: emp.staffCode,
         tillRole: emp.tillRole,
         clockInAt: open.clockIn,
       };
@@ -86,18 +87,25 @@ export const tillIdentify = createServerFn({ method: "POST" })
     return identifyTill(data.employeeId, normalizePin(data.pin));
   });
 
-export const clockOutTill = createServerFn({ method: "POST" }).handler(
-  async (): Promise<ShiftTotals> => {
+export const previewClockOut = createServerFn({ method: "POST" })
+  .validator((input: { pin: string }) => input)
+  .handler(async ({ data }): Promise<ShiftTotals> => {
+    const { previewClockOut: preview } = await import("@/lib/staff.server");
+    return preview(normalizePin(data.pin));
+  });
+
+export const clockOutTill = createServerFn({ method: "POST" })
+  .validator((input: { pin: string }) => input)
+  .handler(async ({ data }): Promise<ShiftTotals> => {
     const { clockOutCurrent } = await import("@/lib/staff.server");
-    return clockOutCurrent();
-  },
-);
+    return clockOutCurrent(normalizePin(data.pin));
+  });
 
 export const forceClockOutTill = createServerFn({ method: "POST" })
-  .validator((input: { id: string }) => input)
+  .validator((input: { id: string; pin: string }) => input)
   .handler(async ({ data }) => {
     const { forceClockOutEmployee } = await import("@/lib/staff.server");
-    await forceClockOutEmployee(data.id);
+    await forceClockOutEmployee(data.id, normalizePin(data.pin));
     return { ok: true as const };
   });
 

@@ -16,6 +16,7 @@ import {
   hoursRange,
   pinOk,
   shiftsToCsv,
+  staffTag,
   tillRoleLabel,
   type HoursRange,
   type StaffEmployee,
@@ -65,9 +66,10 @@ export function StaffDesk() {
   return (
     <section>
       <p className="mt-0 mb-3 text-sm text-butty-muted">
-        Each person gets a 4-digit till code. They pick their name on the till,
-        enter the code, and land on today's roster. Clock out on the till ends
-        that person's shift — hours land here.
+        Each person gets a unique staff ID and a 4-digit till code. Names can
+        repeat — the ID tells them apart on the till. Clock out needs their
+        PIN. Taking someone off the till keeps their ID and tickets; that code
+        can then be reused.
       </p>
 
       <AddEmployee
@@ -258,7 +260,7 @@ function EmployeeRow({
         <User size={16} className="shrink-0" />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-bold">
-            {e.name}
+            {staffTag(e.staffCode)} {e.name}
             <span className="ml-1.5 font-semibold text-butty-muted">
               · {tillRoleLabel(e.tillRole)}
             </span>
@@ -358,8 +360,7 @@ function EmployeeRow({
               {e.active ? "Take off till" : "Put back on till"}
             </button>
           </div>
-          {e.active && (
-            <form
+          <form
               className="mt-2 flex gap-2"
               onSubmit={(ev) => {
                 ev.preventDefault();
@@ -391,7 +392,6 @@ function EmployeeRow({
                 Set code
               </button>
             </form>
-          )}
         </div>
       )}
     </div>

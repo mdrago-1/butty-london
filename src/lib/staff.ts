@@ -9,12 +9,14 @@ export type StaffSession = {
   till?: boolean;
   employeeId?: string;
   employeeName?: string;
+  staffCode?: string;
   tillRole?: TillRole;
   clockInAt?: string | null;
 };
 
 export type StaffEmployee = {
   id: string;
+  staffCode: string;
   name: string;
   active: boolean;
   onShift: boolean;
@@ -28,6 +30,7 @@ export type StaffShift = {
   id: string;
   employeeId: string;
   employeeName: string;
+  staffCode: string;
   clockIn: string;
   clockOut: string | null;
   hours: number;
@@ -36,6 +39,7 @@ export type StaffShift = {
 
 export type TillPerson = {
   id: string;
+  staffCode: string;
   name: string;
   tillRole: TillRole;
   onShift: boolean;
@@ -45,6 +49,7 @@ export type TillPerson = {
 export type ShiftTotals = {
   employeeId: string;
   employeeName: string;
+  staffCode: string;
   clockIn: string;
   clockOut: string;
   hours: number;
@@ -63,6 +68,19 @@ export function tillRoleLabel(role: TillRole): string {
   return "Cashier";
 }
 
+export function staffTag(code?: string | null): string {
+  const c = String(code || "").replace(/^#/, "").trim();
+  return c ? `#${c}` : "";
+}
+
+export function duplicateNames(people: { name: string }[]): Set<string> {
+  const n = new Map<string, number>();
+  for (const p of people) n.set(p.name, (n.get(p.name) || 0) + 1);
+  return new Set(
+    [...n.entries()].filter(([, c]) => c > 1).map(([name]) => name),
+  );
+}
+
 export function canManageTeam(role?: TillRole | null): boolean {
   return role === "manager";
 }
@@ -71,13 +89,8 @@ export function canVoidTickets(role?: TillRole | null): boolean {
   return role === "manager";
 }
 
-export function canForceClockOut(
-  actor?: TillRole | null,
-  target?: TillRole | null,
-): boolean {
-  if (actor === "manager") return true;
-  if (actor === "shift_lead" && (target ?? "cashier") === "cashier") return true;
-  return false;
+export function canForceClockOut(actor?: TillRole | null): boolean {
+  return actor === "manager";
 }
 
 export function normalizePin(raw: string): string {
@@ -179,6 +192,11 @@ export function fmtLondonYmd(iso: string): string {
   }).format(new Date(t));
 }
 
+export function ticketCountLabel(n: number): string {
+  if (n === 1) return "1 ticket";
+  return `${n} tickets`;
+}
+
 function csvCell(v: string | number): string {
   const s = String(v);
   if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
@@ -186,9 +204,10 @@ function csvCell(v: string | number): string {
 }
 
 export function shiftsToCsv(rows: StaffShift[]): string {
-  const header = "Employee,Date,Clock in,Clock out,Hours";
+  const header = "Staff ID,Employee,Date,Clock in,Clock out,Hours";
   const lines = rows.map((r) =>
     [
+      csvCell(staffTag(r.staffCode)),
       csvCell(r.employeeName),
       csvCell(fmtLondonYmd(r.clockIn)),
       csvCell(fmtLondonTime(r.clockIn)),

@@ -18,6 +18,7 @@ import {
   forceClockOutTill,
   getStaffSession,
   listTillRoster,
+  previewClockOut,
   setStaffEmployeeActive,
   setStaffEmployeePin,
   setStaffEmployeeRole,
@@ -27,9 +28,12 @@ import {
   canForceClockOut,
   canManageTeam,
   canVoidTickets,
+  duplicateNames,
   fmtLondonTime,
   normalizePin,
   pinOk,
+  staffTag,
+  ticketCountLabel,
   tillRoleLabel,
   type ShiftTotals,
   type StaffSession,
@@ -49,6 +53,9 @@ export function TillShell({ children }: { children: ReactNode }) {
   const [switching, setSwitching] = useState(false);
   const [picked, setPicked] = useState<TillPerson | null>(null);
   const [totals, setTotals] = useState<ShiftTotals | null>(null);
+  const [clockOutUi, setClockOutUi] = useState<
+    null | { step: "pin" } | { step: "confirm"; pin: string; preview: ShiftTotals }
+  >(null);
   const [teamOpen, setTeamOpen] = useState(false);
   const [voiding, setVoiding] = useState<Order | null>(null);
   const [clockErr, setClockErr] = useState<string | null>(null);
@@ -58,6 +65,7 @@ export function TillShell({ children }: { children: ReactNode }) {
     ? {
         id: session.employeeId,
         name: session.employeeName || "Staff",
+        staffCode: session.staffCode || "",
         tillRole: session.tillRole || ("cashier" as TillRole),
         clockInAt: session.clockInAt ?? null,
       }
@@ -87,7 +95,10 @@ export function TillShell({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const padOpen = !!operator && !locked && !switching && !totals;
+  const padOpen =
+    !!operator && !locked && !switching && !totals && !clockOutUi;
+  const onShift = roster.filter((p) => p.onShift);
+  const canTeam = !!operator && padOpen && canManageTeam(operator.tillRole);
 
   useEffect(() => {
     if (!padOpen) return;
@@ -102,6 +113,7 @@ export function TillShell({ children }: { children: ReactNode }) {
         setLocked(true);
         setTeamOpen(false);
         setVoiding(null);
+        setClockOutUi(null);
       }
     }, 1000);
     return () => {
@@ -111,25 +123,31 @@ export function TillShell({ children }: { children: ReactNode }) {
     };
   }, [padOpen]);
 
-  const onShift = roster.filter((p) => p.onShift);
-  const canTeam =
-    !!operator &&
-    (canManageTeam(operator.tillRole) || operator.tillRole === "shift_lead");
-
   const identified = async (s: StaffSession) => {
     setSession(s);
     setLocked(false);
     setSwitching(false);
     setPicked(null);
     setTotals(null);
+    setClockOutUi(null);
     setTeamOpen(false);
     setRoster(await listTillRoster());
   };
 
-  const clockOut = async () => {
+  const startClockOut = () => {
+    setClockErr(null);
+    setClockOutUi({ step: "pin" });
+    setLocked(false);
+    setSwitching(false);
+    setPicked(null);
+    setTeamOpen(false);
+  };
+
+  const confirmClockOut = async (pin: string) => {
     setClockErr(null);
     try {
-      const sheet = await clockOutTill();
+      const sheet = await clockOutTill({ data: { pin } });
+      setClockOutUi(null);
       setTotals(sheet);
       setSession({ role: "kitchen", till: true });
       setLocked(false);
@@ -139,15 +157,18 @@ export function TillShell({ children }: { children: ReactNode }) {
       setRoster(await listTillRoster());
     } catch (e) {
       setClockErr(e instanceof Error ? e.message : "Couldn't clock out.");
+      setClockOutUi(null);
     }
   };
 
   if (!ready) return <Splash />;
 
   const showNames = !operator || switching;
-  const showLock = !!operator && locked && !switching && !picked && !totals;
-  const showPin = !!picked && !totals;
-  const blockPad = !padOpen || !!totals || showNames || showLock || showPin;
+  const showLock =
+    !!operator && locked && !switching && !picked && !totals && !clockOutUi;
+  const showPin = !!picked && !totals && !clockOutUi;
+  const blockPad =
+    !padOpen || !!totals || showNames || showLock || showPin || !!clockOutUi;
 
   return (
     <ShopLive>
@@ -166,8 +187,9 @@ export function TillShell({ children }: { children: ReactNode }) {
           setTeamOpen(false);
           setSwitching(false);
           setPicked(null);
+          setClockOutUi(null);
         }}
-        onClockOut={() => void clockOut()}
+        onClockOut={startClockOut}
         onTeam={() => setTeamOpen(true)}
         onPickOnShift={(p) => {
           if (operator && p.id === operator.id) return;
@@ -199,6 +221,22 @@ export function TillShell({ children }: { children: ReactNode }) {
               totals={totals}
               onDone={() => setTotals(null)}
             />
+          ) : clockOutUi?.step === "confirm" ? (
+            <ClockOutConfirm
+              totals={clockOutUi.preview}
+              onCancel={() => setClockOutUi(null)}
+              onConfirm={() => void confirmClockOut(clockOutUi.pin)}
+            />
+          ) : clockOutUi?.step === "pin" && operator ? (
+            <ClockOutPin
+              name={operator.name}
+              staffCode={operator.staffCode}
+              onBack={() => setClockOutUi(null)}
+              onOk={async (pin) => {
+                const preview = await previewClockOut({ data: { pin } });
+                setClockOutUi({ step: "confirm", pin, preview });
+              }}
+            />
           ) : showPin && picked ? (
             <PinStep
               person={picked}
@@ -217,6 +255,7 @@ export function TillShell({ children }: { children: ReactNode }) {
                 roster.find((p) => p.id === operator.id) ?? {
                   id: operator.id,
                   name: operator.name,
+                  staffCode: operator.staffCode,
                   tillRole: operator.tillRole,
                   onShift: true,
                   clockInAt: operator.clockInAt,
@@ -285,6 +324,7 @@ function TillHeader({
   operator: {
     id: string;
     name: string;
+    staffCode: string;
     tillRole: TillRole;
     clockInAt: string | null;
   } | null;
@@ -306,6 +346,8 @@ function TillHeader({
                 {operator.name}
               </div>
               <div className="text-xs font-semibold text-butty-muted">
+                {staffTag(operator.staffCode)}
+                {operator.staffCode ? " · " : ""}
                 {tillRoleLabel(operator.tillRole)}
                 {operator.clockInAt
                   ? ` · in since ${fmtLondonTime(operator.clockInAt)}`
@@ -353,6 +395,7 @@ function TillHeader({
           </span>
           {onShift.map((p) => {
             const active = operator?.id === p.id;
+            const dups = duplicateNames(onShift);
             return (
               <button
                 key={p.id}
@@ -366,6 +409,7 @@ function TillHeader({
                 )}
               >
                 {p.name}
+                {dups.has(p.name) ? ` ${staffTag(p.staffCode)}` : ""}
               </button>
             );
           })}
@@ -463,6 +507,7 @@ function ClockInStep({
   onPick: (p: TillPerson) => void;
   onCancel?: () => void;
 }) {
+  const dups = duplicateNames(people);
   return (
     <div className="mx-auto w-full max-w-[420px]">
       <Logo size={36} />
@@ -494,6 +539,7 @@ function ClockInStep({
                   )}
                 >
                   {p.name}
+                  {dups.has(p.name) ? ` ${staffTag(p.staffCode)}` : ""}
                 </button>
               ))}
             </div>
@@ -514,6 +560,8 @@ function ClockInStep({
               >
                 <div className="text-base font-bold leading-tight">{p.name}</div>
                 <div className="mt-0.5 text-xs font-semibold text-butty-muted">
+                  {staffTag(p.staffCode)}
+                  {p.staffCode ? " · " : ""}
                   {tillRoleLabel(p.tillRole)}
                   {p.onShift ? " · on shift" : ""}
                 </div>
@@ -593,7 +641,11 @@ function PinStep({
       <Logo size={36} />
       <div className="mt-5 rounded-[22px] border-[3px] border-butty-ink bg-butty-paper p-5 shadow-[4px_4px_0_var(--color-butty-ink)]">
         <h1 className="m-0 font-display text-2xl leading-none">{person.name}</h1>
-        <p className="mt-2 mb-0 text-sm text-butty-muted">{hint}</p>
+        <p className="mt-2 mb-0 text-sm text-butty-muted">
+          {staffTag(person.staffCode)}
+          {person.staffCode ? " · " : ""}
+          {hint}
+        </p>
         <PinPad
           onSubmit={async (pin) => {
             const s = await tillIdentify({
@@ -703,6 +755,91 @@ function PinPad({ onSubmit }: { onSubmit: (pin: string) => Promise<void> }) {
   );
 }
 
+function ClockOutPin({
+  name,
+  staffCode,
+  onBack,
+  onOk,
+}: {
+  name: string;
+  staffCode: string;
+  onBack: () => void;
+  onOk: (pin: string) => Promise<void>;
+}) {
+  return (
+    <div className="mx-auto w-full max-w-[380px]">
+      <Logo size={36} />
+      <div className="mt-5 rounded-[22px] border-[3px] border-butty-ink bg-butty-paper p-5 shadow-[4px_4px_0_var(--color-butty-ink)]">
+        <h1 className="m-0 font-display text-2xl leading-none">Clock out</h1>
+        <p className="mt-2 mb-0 text-sm text-butty-muted">
+          Enter your code to clock out {name}
+          {staffCode ? ` (${staffTag(staffCode)})` : ""}.
+        </p>
+        <PinPad onSubmit={onOk} />
+        <button
+          type="button"
+          onClick={onBack}
+          className="mt-3 h-11 w-full text-sm font-bold underline"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ClockOutConfirm({
+  totals,
+  onCancel,
+  onConfirm,
+}: {
+  totals: ShiftTotals;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="mx-auto w-full max-w-[380px]">
+      <div className="rounded-[22px] border-[3px] border-butty-ink bg-butty-paper p-5 shadow-[4px_4px_0_var(--color-butty-ink)]">
+        <div className="text-xs font-bold tracking-widest text-butty-muted uppercase">
+          Confirm clock out
+        </div>
+        <h1 className="mt-1 mb-0 font-display text-3xl leading-none">
+          {totals.employeeName}
+        </h1>
+        {totals.staffCode ? (
+          <p className="mt-1 mb-0 text-sm font-semibold text-butty-muted">
+            {staffTag(totals.staffCode)}
+          </p>
+        ) : null}
+        <p className="mt-4 mb-0 text-lg font-bold">
+          {ticketCountLabel(totals.tickets)} this shift
+        </p>
+        <div className="mt-5 flex gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="h-14 flex-1 rounded-[12px] border-2 border-butty-ink bg-butty-cream text-sm font-bold"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              onConfirm();
+            }}
+            className="h-14 flex-1 rounded-2xl bg-butty-red text-sm font-bold text-butty-cream shadow-[0_5px_0_var(--color-butty-red-deep)]"
+          >
+            {busy ? "Clocking out…" : "Clock out"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TotalsSheet({
   totals,
   onDone,
@@ -719,6 +856,11 @@ function TotalsSheet({
         <h1 className="mt-1 mb-0 font-display text-3xl leading-none">
           {totals.employeeName}
         </h1>
+        {totals.staffCode ? (
+          <p className="mt-1 mb-0 text-sm font-semibold text-butty-muted">
+            {staffTag(totals.staffCode)}
+          </p>
+        ) : null}
         <p className="mt-3 mb-0 text-sm font-semibold text-butty-muted">
           {fmtLondonTime(totals.clockIn)} – {fmtLondonTime(totals.clockOut)}
         </p>
@@ -825,6 +967,7 @@ function TeamSheet({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [people, setPeople] = useState(roster);
+  const [forceId, setForceId] = useState<string | null>(null);
 
   const refresh = async () => {
     const next = await listTillRoster();
@@ -888,6 +1031,8 @@ function TeamSheet({
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-bold">{p.name}</div>
                     <div className="text-xs text-butty-muted">
+                      {staffTag(p.staffCode)}
+                      {p.staffCode ? " · " : ""}
                       {tillRoleLabel(p.tillRole)}
                       {p.onShift && p.clockInAt
                         ? ` · on since ${fmtLondonTime(p.clockInAt)}`
@@ -903,15 +1048,11 @@ function TeamSheet({
                 <div className="mt-2 flex flex-wrap gap-2">
                   {p.onShift &&
                     p.id !== actor.id &&
-                    canForceClockOut(actor.tillRole, p.tillRole) && (
+                    canForceClockOut(actor.tillRole) && (
                       <button
                         type="button"
                         disabled={busy}
-                        onClick={() =>
-                          void run(() =>
-                            forceClockOutTill({ data: { id: p.id } }),
-                          )
-                        }
+                        onClick={() => setForceId(p.id)}
                         className="rounded-[10px] border-2 border-butty-ink bg-butty-yellow px-3 py-2 text-xs font-bold"
                       >
                         Clock out
@@ -957,6 +1098,52 @@ function TeamSheet({
             ))
           )}
         </div>
+      </div>
+      {forceId && (
+        <ForceClockOutPin
+          person={people.find((p) => p.id === forceId)}
+          onClose={() => setForceId(null)}
+          onOk={async (pin) => {
+            await forceClockOutTill({ data: { id: forceId, pin } });
+            setForceId(null);
+            await refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function ForceClockOutPin({
+  person,
+  onClose,
+  onOk,
+}: {
+  person?: TillPerson;
+  onClose: () => void;
+  onOk: (pin: string) => Promise<void>;
+}) {
+  return (
+    <div className="absolute inset-0 z-10 grid place-items-center bg-butty-ink/55 p-4">
+      <div className="w-full max-w-[360px] rounded-[22px] border-[3px] border-butty-ink bg-butty-paper p-5 shadow-[6px_6px_0_var(--color-butty-ink)]">
+        <div className="text-xs font-bold tracking-widest text-butty-muted uppercase">
+          Manager code
+        </div>
+        <h2 className="mt-1 mb-0 font-display text-2xl">
+          Clock out {person?.name || "staff"}
+        </h2>
+        <p className="mt-2 mb-0 text-sm text-butty-muted">
+          {person?.staffCode ? `${staffTag(person.staffCode)} · ` : ""}
+          Enter your manager PIN.
+        </p>
+        <PinPad onSubmit={onOk} />
+        <button
+          type="button"
+          onClick={onClose}
+          className="mt-3 h-11 w-full text-sm font-bold underline"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   );
