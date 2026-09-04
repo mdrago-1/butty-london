@@ -13,6 +13,7 @@ export type MenuItem = {
   allergens: string[];
   remove: string[];
   extras: Extra[];
+  photo?: string | null;
 };
 
 export type OrderLine = {

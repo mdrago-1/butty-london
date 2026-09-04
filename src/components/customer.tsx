@@ -14,6 +14,7 @@ import { AccountScreen } from "@/components/account";
 import { Chip, inpStyle, PrimaryButton, QtyBtn, ScreenHead, SubHead } from "@/components/bits";
 import { FindUs } from "@/components/find-us";
 import { Logo } from "@/components/logo";
+import { MenuPhoto } from "@/components/menu-photo";
 import { Privacy } from "@/components/privacy";
 import { TestPay } from "@/components/test-pay";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -228,7 +229,7 @@ export function Customer() {
   };
 
   return (
-    <div className="mx-auto min-h-dvh max-w-[480px] bg-butty-paper shadow-[0_0_40px_rgba(0,0,0,.15)]">
+    <div className="mx-auto min-h-dvh w-full max-w-[480px] bg-butty-paper shadow-[0_0_40px_rgba(0,0,0,.15)] md:max-w-[800px] lg:max-w-[1080px]">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
@@ -558,70 +559,72 @@ function CustomerMenu({
             <div className="mt-0.5 mb-3 text-[12.5px] text-butty-muted">
               {s.note}
             </div>
-            <div
-              className={cn(
-                "grid gap-2.5",
-                !(st.open && shopOpen) && "opacity-50",
-              )}
-            >
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
               {s.items.map((it) => {
                 const q = qtyOf(it.id);
                 const buyable = st.open && shopOpen && !it.soldOut;
                 return (
-                  <button
+                  <article
                     key={it.id}
-                    type="button"
-                    disabled={!buyable}
-                    onClick={() => openCustomise(it)}
                     className={cn(
-                      "flex w-full gap-3 rounded-[14px] border-2 border-butty-ink bg-butty-paper p-3.5 text-left",
+                      "flex flex-col overflow-hidden rounded-[18px] border-[3px] border-butty-ink bg-butty-paper",
                       q
                         ? "shadow-[3px_3px_0_var(--color-butty-red)]"
                         : "shadow-[3px_3px_0_var(--color-butty-shadow)]",
                     )}
                   >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2 text-[15.5px] font-bold">
-                        {it.name}
-                        {it.veg && (
-                          <Leaf
-                            size={14}
-                            className="text-butty-green"
-                            aria-label="Vegetarian"
-                          />
-                        )}
-                        {it.soldOut && (
-                          <span className="rounded-full bg-butty-ink px-2 py-px text-[11px] text-white">
-                            Sold out
-                          </span>
-                        )}
-                        {q > 0 && !it.soldOut && (
-                          <span className="rounded-full bg-butty-red px-2 py-px text-[11px] text-white">
-                            {q} in order
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-0.5 text-[13px] leading-snug text-butty-muted">
-                        {it.desc}
-                      </div>
-                      {it.allergens.length > 0 && (
-                        <div className="mt-1 text-[11px] text-butty-faint">
-                          Allergens: {it.allergens.join(", ")}
+                    <button
+                      type="button"
+                      onClick={() => openCustomise(it)}
+                      className="w-full text-left"
+                    >
+                      <MenuPhoto item={it} soldOut={it.soldOut} size="card" />
+                      <div className="px-3 pt-3">
+                        <div className="flex items-start gap-1.5 text-[15px] font-bold leading-tight">
+                          <span className="min-w-0 flex-1">{it.name}</span>
+                          {it.veg && (
+                            <Leaf
+                              size={14}
+                              className="mt-0.5 shrink-0 text-butty-green"
+                              aria-label="Vegetarian"
+                            />
+                          )}
                         </div>
-                      )}
-                      <div className="mt-1.5 font-bold tabular-nums text-butty-red-deep">
+                        <p className="mt-1 mb-0 truncate text-[13px] leading-snug text-butty-muted">
+                          {it.desc}
+                        </p>
+                      </div>
+                    </button>
+                    <div className="mt-auto flex items-center justify-between gap-2 px-3 pt-2 pb-3">
+                      <div className="font-bold tabular-nums text-butty-red-deep">
                         £{it.price.toFixed(2)}
                       </div>
-                    </div>
-                    <div
-                      className={cn(
-                        "grid size-10 shrink-0 self-center place-items-center rounded-[10px] border-2 border-butty-ink",
-                        buyable ? "bg-butty-yellow" : "bg-neutral-200",
+                      {it.soldOut ? (
+                        <span className="rounded-full bg-butty-ink px-2.5 py-1 text-[11px] font-bold text-butty-cream">
+                          Sold out
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={!buyable}
+                          onClick={() => openCustomise(it)}
+                          aria-label={`Add ${it.name}`}
+                          className={cn(
+                            "grid size-11 shrink-0 place-items-center rounded-[10px] border-2 border-butty-ink",
+                            buyable ? "bg-butty-yellow" : "bg-butty-disabled",
+                          )}
+                        >
+                          {q > 0 ? (
+                            <span className="text-sm font-bold tabular-nums">
+                              {q}
+                            </span>
+                          ) : (
+                            <Plus size={20} />
+                          )}
+                        </button>
                       )}
-                    >
-                      <Plus size={20} />
                     </div>
-                  </button>
+                  </article>
                 );
               })}
             </div>
@@ -711,8 +714,9 @@ function Customise({
   return (
     <div className="pb-6">
       <ScreenHead title={item.name} onBack={onBack} />
-      <div className="px-[18px] py-[18px]">
-        <div className="text-[13.5px] leading-snug text-butty-muted">
+      <div className="mx-auto max-w-[520px] px-[18px] py-[18px]">
+        <MenuPhoto item={item} soldOut={item.soldOut} size="hero" />
+        <div className="mt-3 text-[13.5px] leading-snug text-butty-muted">
           {item.desc}
         </div>
         {item.remove.length > 0 && (
@@ -785,8 +789,8 @@ function Customise({
             <Plus size={18} />
           </QtyBtn>
         </div>
-        <PrimaryButton className="mt-5" onClick={commit}>
-          Add to order · £{linePrice.toFixed(2)}
+        <PrimaryButton className="mt-5" onClick={commit} disabled={item.soldOut}>
+          {item.soldOut ? "Sold out" : `Add to order · £${linePrice.toFixed(2)}`}
         </PrimaryButton>
       </div>
     </div>
@@ -838,35 +842,44 @@ function Checkout({
 }) {
   const slots = useMemo(() => buildSlots(hour), [hour]);
   const canPay = cart.length > 0 && name.trim().length > 1;
+  const menu = useShop((s) => s.menu);
   return (
     <div className="pb-6">
       <ScreenHead title="Your order" onBack={back} />
-      <div className="px-[18px] py-[18px]">
+      <div className="mx-auto max-w-[520px] px-[18px] py-[18px]">
         <div className="grid gap-2">
-          {cart.map((l, i) => (
-            <div
-              key={i}
-              className="flex gap-3 rounded-xl border-2 border-butty-ink bg-butty-paper px-[13px] py-[11px]"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="text-[14.5px] font-bold">
-                  {l.qty > 1 ? `${l.qty}× ` : ""}
-                  {l.name}
-                </div>
-                {l.mods.length > 0 && (
-                  <div className="mt-0.5 text-[12.5px] text-butty-muted">
-                    {l.mods.join(" · ")}
+          {cart.map((l, i) => {
+            const item = menu.find((m) => m.id === l.itemId);
+            return (
+              <div
+                key={i}
+                className="flex items-center gap-3 rounded-xl border-2 border-butty-ink bg-butty-paper px-[13px] py-[11px]"
+              >
+                <MenuPhoto
+                  item={item || { id: l.itemId, name: l.name }}
+                  alt={l.name}
+                  size="thumb"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[14.5px] font-bold">
+                    {l.qty > 1 ? `${l.qty}× ` : ""}
+                    {l.name}
                   </div>
-                )}
-                <div className="mt-0.5 text-[13px] font-semibold tabular-nums text-butty-red-deep">
-                  £{l.linePrice.toFixed(2)}
+                  {l.mods.length > 0 && (
+                    <div className="mt-0.5 text-[12.5px] text-butty-muted">
+                      {l.mods.join(" · ")}
+                    </div>
+                  )}
+                  <div className="mt-0.5 text-[13px] font-semibold tabular-nums text-butty-red-deep">
+                    £{l.linePrice.toFixed(2)}
+                  </div>
                 </div>
+                <QtyBtn onClick={() => removeLine(i)}>
+                  <Minus size={15} />
+                </QtyBtn>
               </div>
-              <QtyBtn onClick={() => removeLine(i)}>
-                <Minus size={15} />
-              </QtyBtn>
-            </div>
-          ))}
+            );
+          })}
         </div>
         <SubHead>Collection time</SubHead>
         <div className="flex flex-wrap gap-2">
@@ -991,6 +1004,7 @@ function Tracking({
   reset: () => void;
   backToMenu: () => void;
 }) {
+  const menu = useShop((s) => s.menu);
   const pct = (order.stage / (STAGES.length - 1)) * 100;
   const st = STAGES[order.stage];
   const ready = order.stage === STAGES.length - 1;
@@ -1003,7 +1017,7 @@ function Tracking({
   return (
     <div className="pb-6">
       <ScreenHead title="Your order" onBack={backToMenu} />
-      <div className="px-6 py-6">
+      <div className="mx-auto max-w-[520px] px-6 py-6">
         <div className="mb-5 text-center">
           <div className="text-xs font-semibold tracking-[2px] text-butty-muted uppercase">
             Collection no.
@@ -1082,17 +1096,27 @@ function Tracking({
           )}
         </div>
         <div className="mt-6 border-t-2 border-dashed border-butty-line pt-4">
-          {order.lines.map((l, i) => (
-            <div key={i} className="mb-1.5 text-[13.5px]">
-              <span className="font-bold">
-                {l.qty > 1 ? `${l.qty}× ` : ""}
-                {l.name}
-              </span>
-              {l.mods.length > 0 && (
-                <span className="text-butty-muted"> — {l.mods.join(", ")}</span>
-              )}
-            </div>
-          ))}
+          {order.lines.map((l, i) => {
+            const item = menu.find((m) => m.id === l.itemId);
+            return (
+              <div key={i} className="mb-2 flex items-center gap-3">
+                <MenuPhoto
+                  item={item || { id: l.itemId, name: l.name }}
+                  alt={l.name}
+                  size="thumb"
+                />
+                <div className="min-w-0 flex-1 text-[13.5px]">
+                  <div className="font-bold">
+                    {l.qty > 1 ? `${l.qty}× ` : ""}
+                    {l.name}
+                  </div>
+                  {l.mods.length > 0 && (
+                    <div className="text-butty-muted">{l.mods.join(", ")}</div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
           <div className="mt-2 flex justify-between text-sm font-bold">
             <span>Paid</span>
             <span className="tabular-nums">£{net.toFixed(2)}</span>

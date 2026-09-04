@@ -31,6 +31,17 @@ export function sectionAnchor(name: string) {
   return `menu-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 }
 
+export const MENU_PLACEHOLDER = "/menu/placeholder.jpg";
+
+export function menuPhotoUrl(
+  item?: { id?: string; photo?: string | null } | null,
+): string {
+  const custom = item?.photo?.trim();
+  if (custom) return custom;
+  if (item?.id) return `/menu/${item.id}.jpg`;
+  return MENU_PLACEHOLDER;
+}
+
 export const SECTION_NOTES: Record<string, string> = {
   "Breakfast Butties": "Served 8am – 11am",
   "All-Day Sandwiches": "Served 8am – close",

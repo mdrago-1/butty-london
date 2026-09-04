@@ -41,6 +41,7 @@ type MenuRow = {
   allergens: unknown;
   removable: unknown;
   extras: unknown;
+  photo?: string | null;
 };
 
 type OrderRow = {
@@ -85,6 +86,7 @@ function rowToItem(r: MenuRow): MenuItem {
     allergens: asJson<string[]>(r.allergens, []),
     remove: asJson<string[]>(r.removable, []),
     extras: asJson<Extra[]>(r.extras, []),
+    photo: r.photo || `/menu/${r.id}.jpg`,
   };
 }
 
@@ -129,7 +131,7 @@ export const getShopSnapshot = createServerFn({ method: "GET" }).handler(
     const sql = await getSql();
     const items = await sql<MenuRow>`
       select id, section, name, description, price, avail_from, avail_to,
-             sold_out, veg, allergens, removable, extras
+             sold_out, veg, allergens, removable, extras, photo
       from menu_items
       order by section, sort_order, name
     `;
@@ -604,8 +606,8 @@ export const upsertMenuItem = createServerFn({ method: "POST" })
     await sql.query(
       `insert into menu_items
          (id, section, name, description, price, avail_from, avail_to,
-          sold_out, veg, allergens, removable, extras, sort_order)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,100)
+          sold_out, veg, allergens, removable, extras, sort_order, photo)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,100,$13)
        on conflict (id) do update set
          section = excluded.section,
          name = excluded.name,
@@ -617,7 +619,8 @@ export const upsertMenuItem = createServerFn({ method: "POST" })
          veg = excluded.veg,
          allergens = excluded.allergens,
          removable = excluded.removable,
-         extras = excluded.extras`,
+         extras = excluded.extras,
+         photo = coalesce(excluded.photo, menu_items.photo)`,
       [
         id,
         item.section,
@@ -631,6 +634,7 @@ export const upsertMenuItem = createServerFn({ method: "POST" })
         JSON.stringify(item.allergens || []),
         JSON.stringify(item.remove || []),
         JSON.stringify(item.extras || []),
+        item.photo?.trim() || null,
       ],
     );
     return { ok: true };
