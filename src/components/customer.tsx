@@ -540,6 +540,12 @@ function CustomerMenu({
         )
       )}
 
+      {sections.length === 0 && (
+        <div className="m-4 rounded-xl border-2 border-dashed border-butty-ink bg-butty-cream p-4 text-center text-[13.5px]">
+          The menu is being set — check back shortly.
+        </div>
+      )}
+
       {sections.map((s) => {
         const st = sectionState(s.items);
         return (

@@ -620,7 +620,7 @@ export const upsertMenuItem = createServerFn({ method: "POST" })
          allergens = excluded.allergens,
          removable = excluded.removable,
          extras = excluded.extras,
-         photo = coalesce(excluded.photo, menu_items.photo)`,
+         photo = excluded.photo`,
       [
         id,
         item.section,

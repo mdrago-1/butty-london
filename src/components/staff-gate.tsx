@@ -19,6 +19,7 @@ import { useShop } from "@/lib/store";
 
 export function ShopLive({ children }: { children: ReactNode }) {
   const refresh = useShop((s) => s.refresh);
+  const shopReady = useShop((s) => s.ready);
   useEffect(() => {
     void refresh();
     const t = window.setInterval(() => {
@@ -26,6 +27,7 @@ export function ShopLive({ children }: { children: ReactNode }) {
     }, 2000);
     return () => window.clearInterval(t);
   }, [refresh]);
+  if (!shopReady) return <Splash />;
   return <>{children}</>;
 }
 

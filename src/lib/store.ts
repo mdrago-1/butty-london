@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { SEED } from "./menu";
 import {
   getLoyaltyProfile,
   getMyOrders,
@@ -73,7 +72,7 @@ export const useShop = create<ShopState>()(
   persist(
     (set, get) => ({
       ready: false,
-      menu: SEED,
+      menu: [],
       shopOpen: true,
       specialsPaused: false,
       renovating: true,
@@ -201,7 +200,7 @@ export const useShop = create<ShopState>()(
         set({ account: null, myOrderNo: null, myOrderNos: [], mine: [] }),
     }),
     {
-      name: "butty-co-v3",
+      name: "butty-co-v4",
       partialize: (s) => ({
         account: s.account,
         myOrderNo: s.myOrderNo,

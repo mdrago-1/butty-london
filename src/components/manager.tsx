@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Chip, Field, inpStyle, ScreenHead } from "@/components/bits";
 import { ClubDesk } from "@/components/club-desk";
+import { MenuPhoto } from "@/components/menu-photo";
 import { StaffDesk } from "@/components/staff-desk";
 import { StaffPasswords } from "@/components/staff-passwords";
 import { cn } from "@/lib/cn";
@@ -153,6 +154,13 @@ export function Manager() {
         </button>
       </div>
 
+      {grouped.length === 0 && (
+        <div className="rounded-xl border-2 border-dashed border-butty-ink bg-butty-cream p-4 text-center text-[13.5px]">
+          No items yet. Add the first one — customer and till both use this
+          list.
+        </div>
+      )}
+
       {grouped.map((g) => (
         <div key={g.name} className="mb-[18px]">
           <div className="mb-2 text-xs font-bold tracking-widest text-butty-muted uppercase">
@@ -164,6 +172,7 @@ export function Manager() {
                 key={it.id}
                 className="flex items-center gap-2.5 rounded-xl border-2 border-butty-ink bg-butty-paper px-[13px] py-[11px]"
               >
+                <MenuPhoto item={it} alt={it.name} size="thumb" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5 text-[14.5px] font-bold">
                     {it.name}
@@ -293,6 +302,7 @@ function ItemEditor({
       allergens: [],
       remove: [],
       extras: [],
+      photo: "",
     },
   );
   const set = <K extends keyof MenuItem>(k: K, v: MenuItem[K]) =>
@@ -355,6 +365,21 @@ function ItemEditor({
             style={inpStyle}
             placeholder="What's in it"
           />
+        </Field>
+        <Field label="Photo">
+          <div className="flex items-start gap-3">
+            <MenuPhoto item={f} alt={f.name || "Item photo"} size="thumb" />
+            <input
+              value={f.photo || ""}
+              onChange={(e) => set("photo", e.target.value)}
+              style={inpStyle}
+              className="min-w-0 flex-1"
+              placeholder="/menu/b1.jpg"
+            />
+          </div>
+          <p className="mt-1.5 mb-0 text-[12px] text-butty-muted">
+            Path or URL. Leave blank for the Butty placeholder.
+          </p>
         </Field>
         <div className="flex gap-3">
           <Field label="Price (£)" className="flex-1">
