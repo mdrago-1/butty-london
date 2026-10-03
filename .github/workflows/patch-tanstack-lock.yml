@@ -1,0 +1,71 @@
+name: Patch TanStack Start lockfile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/patch-tanstack-lock.yml
+
+permissions:
+  contents: write
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Bump patched TanStack Start packages
+        run: |
+          npm install --package-lock-only --ignore-scripts \
+            @tanstack/react-start@1.168.60 \
+            @tanstack/react-router@1.170.41 \
+            @tanstack/router-plugin@1.168.42
+          node --input-type=module <<'EOF'
+          import { readFileSync } from "node:fs";
+          const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+          const pkgs = lock.packages;
+          const start = pkgs["node_modules/@tanstack/react-start"]?.version;
+          const core = pkgs["node_modules/@tanstack/start-server-core"]?.version;
+          const router = pkgs["node_modules/@tanstack/react-router"]?.version;
+          const plugin = pkgs["node_modules/@tanstack/router-plugin"]?.version;
+          const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+          console.log(JSON.stringify({
+            start, core, router, plugin,
+            ranges: {
+              start: pkg.dependencies["@tanstack/react-start"],
+              router: pkg.dependencies["@tanstack/react-router"],
+              plugin: pkg.dependencies["@tanstack/router-plugin"],
+            },
+          }));
+          function gte(v, min) {
+            const a = v.split(".").map(Number);
+            const b = min.split(".").map(Number);
+            for (let i = 0; i < 3; i++) {
+              if ((a[i] ?? 0) > (b[i] ?? 0)) return true;
+              if ((a[i] ?? 0) < (b[i] ?? 0)) return false;
+            }
+            return true;
+          }
+          if (start !== "1.168.60" || router !== "1.170.41" || plugin !== "1.168.42" || !core || !gte(core, "1.169.39")) {
+            console.error("resolved versions are not the patched set");
+            process.exit(1);
+          }
+          EOF
+      - name: Commit lockfile and remove this workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git rm -f .github/workflows/patch-tanstack-lock.yml
+          if git diff --cached --quiet; then
+            echo "nothing to commit"
+            exit 1
+          fi
+          git commit -m "Bump @tanstack/react-start to 1.168.60 (CVE-2026-102989)"
+          git push origin HEAD:main
