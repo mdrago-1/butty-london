@@ -12,7 +12,6 @@ export function Logo({
   align?: "center" | "start";
   onClick?: () => void;
 }) {
-  const width = size * 6.2;
   return (
     <Link
       to="/"
@@ -25,23 +24,10 @@ export function Logo({
     >
       <div
         className={cn(
-          "flex max-w-full items-center gap-3",
+          "flex max-w-full items-center",
           align === "center" ? "mx-auto justify-center" : "justify-start",
         )}
-        style={{ width, maxWidth: "100%" }}
       >
-        <img
-          src="/butty-mark.jpg"
-          alt=""
-          width={Math.round(size * 1.25)}
-          height={Math.round(size * 1.25)}
-          className="shrink-0 rounded-full border-[2.5px] border-butty-ink shadow-[2px_2px_0_var(--color-butty-ink)]"
-          style={{
-            width: size * 1.25,
-            height: size * 1.25,
-            objectFit: "cover",
-          }}
-        />
         <div className="min-w-0 text-left">
           <div
             className="font-logo leading-none text-butty-red"
