@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as CounterRouteImport } from './routes/counter'
 import { Route as KitchenRouteImport } from './routes/kitchen'
+import { Route as LlmsDottxtRouteImport } from './routes/llms[.]txt'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OfficeRouteImport } from './routes/office'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -29,6 +30,11 @@ const CounterRoute = CounterRouteImport.update({
 const KitchenRoute = KitchenRouteImport.update({
   id: '/kitchen',
   path: '/kitchen',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LlmsDottxtRoute = LlmsDottxtRouteImport.update({
+  id: '/llms.txt',
+  path: '/llms.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -51,6 +57,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/counter': typeof CounterRoute
   '/kitchen': typeof KitchenRoute
+  '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/office': typeof OfficeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -59,6 +66,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/counter': typeof CounterRoute
   '/kitchen': typeof KitchenRoute
+  '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/office': typeof OfficeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -68,6 +76,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/counter': typeof CounterRoute
   '/kitchen': typeof KitchenRoute
+  '/llms.txt': typeof LlmsDottxtRoute
   '/login': typeof LoginRoute
   '/office': typeof OfficeRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -75,14 +84,28 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/counter' | '/kitchen' | '/login' | '/office' | '/api/auth/$'
+    | '/'
+    | '/counter'
+    | '/kitchen'
+    | '/llms.txt'
+    | '/login'
+    | '/office'
+    | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/counter' | '/kitchen' | '/login' | '/office' | '/api/auth/$'
+  to:
+    | '/'
+    | '/counter'
+    | '/kitchen'
+    | '/llms.txt'
+    | '/login'
+    | '/office'
+    | '/api/auth/$'
   id:
     | '__root__'
     | '/'
     | '/counter'
     | '/kitchen'
+    | '/llms.txt'
     | '/login'
     | '/office'
     | '/api/auth/$'
@@ -92,6 +115,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CounterRoute: typeof CounterRoute
   KitchenRoute: typeof KitchenRoute
+  LlmsDottxtRoute: typeof LlmsDottxtRoute
   LoginRoute: typeof LoginRoute
   OfficeRoute: typeof OfficeRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -118,6 +142,13 @@ declare module '@tanstack/react-router' {
       path: '/kitchen'
       fullPath: '/kitchen'
       preLoaderRoute: typeof KitchenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/llms.txt': {
+      id: '/llms.txt'
+      path: '/llms.txt'
+      fullPath: '/llms.txt'
+      preLoaderRoute: typeof LlmsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -148,6 +179,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CounterRoute: CounterRoute,
   KitchenRoute: KitchenRoute,
+  LlmsDottxtRoute: LlmsDottxtRoute,
   LoginRoute: LoginRoute,
   OfficeRoute: OfficeRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

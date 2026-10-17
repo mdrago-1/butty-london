@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+# Live menu with prices, for assistants: https://www.butty.london/llms.txt

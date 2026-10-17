@@ -24,7 +24,6 @@ import { STAMPS_FOR_REWARD } from "@/lib/loyalty";
 import { STAGE_BG, STAGE_TEXT, STAGES } from "@/lib/stages";
 import { useShop } from "@/lib/store";
 import type { MenuItem, Order, OrderLine, ReorderNote } from "@/lib/types";
-import { localBusinessJsonLd } from "@/lib/venue";
 
 type View = "menu" | "customise" | "checkout" | "tracking" | "account" | "paying" | "privacy";
 
@@ -219,12 +218,6 @@ export function Customer() {
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-[480px] bg-butty-paper shadow-[0_0_40px_rgba(0,0,0,.15)] md:max-w-[800px] lg:max-w-[1080px]">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{
-          __html: JSON.stringify(localBusinessJsonLd(renovating)),
-        }}
-      />
       {view === "menu" && <CustomerMenu {...menuProps} />}
       {view === "account" && user && (
         <AccountScreen

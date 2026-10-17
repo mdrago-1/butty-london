@@ -126,6 +126,45 @@ export type ShopSnapshot = {
   orders: Order[];
 };
 
+export const getPublicMenu = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{
+    renovating: boolean;
+    items: {
+      section: string;
+      name: string;
+      desc: string;
+      price: number;
+      soldOut: boolean;
+    }[];
+  }> => {
+    const sql = await getSql();
+    const items = await sql<{
+      section: string;
+      name: string;
+      description: string;
+      price: unknown;
+      sold_out: boolean;
+    }>`
+      select section, name, description, price, sold_out
+      from menu_items
+      order by section, sort_order, name
+    `;
+    const settings = await sql<{ renovating: boolean }>`
+      select renovating from shop_settings where id = 1
+    `;
+    return {
+      renovating: settings[0] ? !!settings[0].renovating : true,
+      items: items.map((r) => ({
+        section: r.section,
+        name: r.name,
+        desc: r.description,
+        price: num(r.price),
+        soldOut: !!r.sold_out,
+      })),
+    };
+  },
+);
+
 export const getShopSnapshot = createServerFn({ method: "GET" }).handler(
   async (): Promise<ShopSnapshot> => {
     const sql = await getSql();
