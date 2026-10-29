@@ -240,7 +240,7 @@ export const placeShopOrder = createServerFn({ method: "POST" })
       select online_orders, renovating from shop_settings where id = 1
     `;
     if (flags[0]?.renovating) {
-      throw new Error("Opening soon — orders will be back when we open.");
+      throw new Error("Online ordering is coming soon — please order at the counter.");
     }
     if (flags[0] && !flags[0].online_orders) {
       throw new Error("Online orders are paused — try the counter.");

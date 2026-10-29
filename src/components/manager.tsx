@@ -116,8 +116,8 @@ export function Manager() {
               icon={HardHat}
               label="Renovations"
               on={!renovating}
-              onLabel="Open to the public"
-              offLabel="Opening soon"
+              onLabel="Online ordering live"
+              offLabel="Online ordering coming soon"
               toggle={() => setRenovating(!renovating)}
             />
             <ToggleRow

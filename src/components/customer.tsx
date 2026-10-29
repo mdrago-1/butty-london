@@ -101,7 +101,7 @@ export function Customer() {
     const item = menu.find((m) => m.id === line.itemId);
     if (!item) return "no longer on the menu";
     if (item.soldOut) return "sold out";
-    if (!takingOrders) return renovating ? "opening soon" : "online orders paused";
+    if (!takingOrders) return renovating ? "online ordering coming soon" : "online orders paused";
     if (item.section === "Lunch Specials" && specialsPaused) return "specials paused";
     if (hour < item.from) return `available from ${fmtHour(item.from)}`;
     if (hour >= item.to) return `only until ${fmtHour(item.to)}`;
@@ -393,7 +393,7 @@ function CustomerMenu({
             <span className={cn("size-2 rounded-full bg-white", isOpenNow && "animate-pulse")} />
             {!shopOpen
               ? renovating
-                ? "Opening soon"
+                ? "Now open · online ordering coming soon"
                 : "Not taking online orders right now"
               : isOpenNow
                 ? "Open · order for collection"
@@ -477,10 +477,10 @@ function CustomerMenu({
 
       {renovating ? (
         <div className="m-4 rounded-xl border-2 border-butty-ink bg-butty-cream p-4 text-center">
-          <div className="font-display text-base">Opening soon</div>
+          <div className="font-display text-base">Now open — online ordering coming soon</div>
           <p className="mt-1.5 mb-0 text-[13.5px] leading-relaxed text-butty-ink">
-            We're getting 19 Replingham Road ready. Have a look at the menu below — we'll take
-            orders when the shutters go up.
+            We're open at 19 Replingham Road — pop in and order at the counter. Have a look at the
+            menu below; online ordering is on its way.
           </p>
         </div>
       ) : (

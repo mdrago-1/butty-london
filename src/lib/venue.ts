@@ -20,7 +20,7 @@ export const SHOP_MAPS_SEARCH = `https://www.google.com/maps/search/?api=1&query
 export const SHOP_MAPS_DIR = `https://www.google.com/maps/dir/?api=1&destination=${mapsQuery}`;
 export const SHOP_MAPS_EMBED = `https://maps.google.com/maps?q=${mapsQuery}&z=17&output=embed`;
 
-export function localBusinessJsonLd(renovating: boolean) {
+export function localBusinessJsonLd(_renovating?: boolean) {
   return {
     "@context": "https://schema.org",
     "@type": "CafeOrCoffeeShop",
@@ -45,38 +45,12 @@ export function localBusinessJsonLd(renovating: boolean) {
     hasMap: SHOP_MAPS_SEARCH,
     servesCuisine: "Sandwiches",
     priceRange: "£",
-    ...(renovating
-      ? {
-          openingHoursSpecification: {
-            "@type": "OpeningHoursSpecification",
-            dayOfWeek: [
-              "Monday",
-              "Tuesday",
-              "Wednesday",
-              "Thursday",
-              "Friday",
-              "Saturday",
-              "Sunday",
-            ],
-            opens: "00:00",
-            closes: "00:00",
-          },
-        }
-      : {
-          openingHoursSpecification: {
-            "@type": "OpeningHoursSpecification",
-            dayOfWeek: [
-              "Monday",
-              "Tuesday",
-              "Wednesday",
-              "Thursday",
-              "Friday",
-              "Saturday",
-            ],
-            opens: "08:00",
-            closes: "17:00",
-          },
-        }),
+    openingHoursSpecification: {
+      "@type": "OpeningHoursSpecification",
+      dayOfWeek: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+      opens: "08:00",
+      closes: "17:00",
+    },
   };
 }
 
@@ -95,7 +69,7 @@ export type MenuOfferSource = {
 
 function offerAvailability(item: MenuOfferItem, renovating: boolean) {
   if (item.soldOut) return "https://schema.org/OutOfStock";
-  if (renovating) return "https://schema.org/PreOrder";
+  if (renovating) return "https://schema.org/InStoreOnly";
   return "https://schema.org/InStock";
 }
 
@@ -159,7 +133,7 @@ export function menuJsonLd(menu: MenuOfferSource) {
 /** Plain-text menu for assistants that do not run the page. */
 export function menuForBotsText(menu: MenuOfferSource) {
   const status = menu.renovating
-    ? "Opening soon."
+    ? "Now open at the counter; online ordering coming soon."
     : "Open for collection.";
   const lines = [
     `# ${SHOP_NAME}`,

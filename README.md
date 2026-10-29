@@ -9,7 +9,7 @@ Live site: [https://www.butty.london](https://www.butty.london)
 - Customer menu, click-and-collect, Butty Club (buy 9 sandwiches, 10th free)
 - Kitchen display: `/kitchen`
 - Back office (menu, loyalty, shop flags): `/office`
-- Currently **Opening soon** (renovations) — toggle off from back office → Shop
+- Currently **Now open, online ordering coming soon** — switch online ordering on from back office → Shop
 
 Stack: TanStack Start, React 19, Tailwind v4, Neon Postgres in production, PGLite in local preview.
 
