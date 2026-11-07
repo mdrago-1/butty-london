@@ -1,6 +1,6 @@
 -- Breakfast board: remove the Pesto Butty from breakfast and add the Breakfast Bagel.
 -- Lunch items that mention pesto (Big Tony) stay as they are.
--- No separate till row for the bagel exists in the repo. Price matches the Bacon Butty (£5.00).
+-- Price is £7.00, the amount the shop till charges for the Breakfast Bagel.
 -- Hours, allergens, removables, and extras match the other current breakfast butties.
 -- Salmon Butty photos (breakfast and lunch) point at the new Scottie shot. Nothing else on those rows changes.
 
@@ -16,7 +16,7 @@ insert into menu_items (
   'Breakfast Butties',
   'Breakfast Bagel',
   'Bacon and egg on a bagel, served in the Butty tray',
-  5.00,
+  7.00,
   7.5,
   11.5,
   false,
