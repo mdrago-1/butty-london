@@ -20,7 +20,17 @@ import { StaffDesk } from "@/components/staff-desk";
 import { StaffPasswords } from "@/components/staff-passwords";
 import { cn } from "@/lib/cn";
 import { fmtHour, hourOpts } from "@/lib/format";
-import { ALLERGENS, CLOSE, SECTION_ORDER } from "@/lib/menu";
+import {
+  ALLERGENS,
+  CLOSE,
+  DRINK_GROUPS,
+  canonicalDrinkGroup,
+  drinkGroupHasAddons,
+  drinkGroupOf,
+  formatDrinkAddons,
+  guessDrinkGroup,
+  SECTION_ORDER,
+} from "@/lib/menu";
 import { useShop } from "@/lib/store";
 import type { Extra, MenuItem } from "@/lib/types";
 
@@ -83,9 +93,7 @@ export function Manager() {
             onClick={() => setTab(id)}
             className={cn(
               "flex items-center gap-1.5 rounded-full border-2 border-butty-ink px-3.5 py-2 text-sm font-bold",
-              tab === id
-                ? "bg-butty-ink text-butty-cream"
-                : "bg-butty-paper text-butty-ink",
+              tab === id ? "bg-butty-ink text-butty-cream" : "bg-butty-paper text-butty-ink",
             )}
           >
             <Icon size={14} /> {label}
@@ -143,88 +151,89 @@ export function Manager() {
 
       {tab === "menu" && (
         <>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="m-0 font-display text-base">Menu</h2>
-        <button
-          type="button"
-          onClick={() => setEditing("new")}
-          className="flex items-center gap-1.5 rounded-xl bg-butty-red px-3.5 py-[9px] text-[13.5px] font-bold text-butty-cream shadow-[0_4px_0_var(--color-butty-red-deep)]"
-        >
-          <Plus size={16} /> Add item
-        </button>
-      </div>
-
-      {grouped.length === 0 && (
-        <div className="rounded-xl border-2 border-dashed border-butty-ink bg-butty-cream p-4 text-center text-[13.5px]">
-          No items yet. Add the first one — customer and till both use this
-          list.
-        </div>
-      )}
-
-      {grouped.map((g) => (
-        <div key={g.name} className="mb-[18px]">
-          <div className="mb-2 text-xs font-bold tracking-widest text-butty-muted uppercase">
-            {g.name}
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="m-0 font-display text-base">Menu</h2>
+            <button
+              type="button"
+              onClick={() => setEditing("new")}
+              className="flex items-center gap-1.5 rounded-xl bg-butty-red px-3.5 py-[9px] text-[13.5px] font-bold text-butty-cream shadow-[0_4px_0_var(--color-butty-red-deep)]"
+            >
+              <Plus size={16} /> Add item
+            </button>
           </div>
-          <div className="grid gap-2">
-            {g.items.map((it) => (
-              <div
-                key={it.id}
-                className="flex items-center gap-2.5 rounded-xl border-2 border-butty-ink bg-butty-paper px-[13px] py-[11px]"
-              >
-                <MenuPhoto item={it} alt={it.name} size="thumb" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5 text-[14.5px] font-bold">
-                    {it.name}
-                    {it.veg && (
-                      <Leaf size={13} className="text-butty-green" />
-                    )}
-                    {it.soldOut && (
-                      <span className="rounded-full bg-butty-ink px-[7px] py-px text-[10.5px] text-butty-cream">
-                        Sold out
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-0.5 text-xs text-butty-muted">
-                    £{it.price.toFixed(2)} · {fmtHour(it.from)}–
-                    {fmtHour(it.to)}
-                    {it.allergens.length ? ` · ${it.allergens.join(", ")}` : ""}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => toggleSold(it.id)}
-                  title="Toggle sold out"
-                  className={cn(
-                    "rounded-lg border-2 border-butty-ink px-[9px] py-[7px] text-[11.5px] font-bold",
-                    it.soldOut
-                      ? "bg-butty-ink text-butty-cream"
-                      : "bg-butty-cream text-butty-ink",
-                  )}
-                >
-                  {it.soldOut ? "Sold out" : "In stock"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditing(it)}
-                  aria-label={`Edit ${it.name}`}
-                  className="grid size-[34px] place-items-center rounded-lg border-2 border-butty-ink bg-butty-cream text-butty-ink"
-                >
-                  <Edit3 size={15} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => deleteItem(it.id)}
-                  aria-label={`Delete ${it.name}`}
-                  className="grid size-[34px] place-items-center rounded-lg border-2 border-butty-ink bg-butty-cream text-butty-red"
-                >
-                  <Trash2 size={15} />
-                </button>
+
+          {grouped.length === 0 && (
+            <div className="rounded-xl border-2 border-dashed border-butty-ink bg-butty-cream p-4 text-center text-[13.5px]">
+              No items yet. Add the first one — customer and till both use this list.
+            </div>
+          )}
+
+          {grouped.map((g) => (
+            <div key={g.name} className="mb-[18px]">
+              <div className="mb-2 text-xs font-bold tracking-widest text-butty-muted uppercase">
+                {g.name}
               </div>
-            ))}
-          </div>
-        </div>
-      ))}
+              <div className="grid gap-2">
+                {g.items.map((it) => (
+                  <div
+                    key={it.id}
+                    className="flex items-center gap-2.5 rounded-xl border-2 border-butty-ink bg-butty-paper px-[13px] py-[11px]"
+                  >
+                    <MenuPhoto item={it} alt={it.name} size="thumb" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[14.5px] font-bold">
+                        {it.name}
+                        {it.veg && <Leaf size={13} className="text-butty-green" />}
+                        {it.soldOut && (
+                          <span className="rounded-full bg-butty-ink px-[7px] py-px text-[10.5px] text-butty-cream">
+                            Sold out
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-0.5 text-xs text-butty-muted">
+                        £{it.price.toFixed(2)}
+                        {it.section === "Juices & Drinks" && drinkGroupOf(it)
+                          ? ` · ${drinkGroupOf(it)}`
+                          : ""}
+                        {" · "}
+                        {fmtHour(it.from)}–{fmtHour(it.to)}
+                        {it.allergens.length ? ` · ${it.allergens.join(", ")}` : ""}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleSold(it.id)}
+                      title="Toggle sold out"
+                      className={cn(
+                        "rounded-lg border-2 border-butty-ink px-[9px] py-[7px] text-[11.5px] font-bold",
+                        it.soldOut
+                          ? "bg-butty-ink text-butty-cream"
+                          : "bg-butty-cream text-butty-ink",
+                      )}
+                    >
+                      {it.soldOut ? "Sold out" : "In stock"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditing(it)}
+                      aria-label={`Edit ${it.name}`}
+                      className="grid size-[34px] place-items-center rounded-lg border-2 border-butty-ink bg-butty-cream text-butty-ink"
+                    >
+                      <Edit3 size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteItem(it.id)}
+                      aria-label={`Delete ${it.name}`}
+                      className="grid size-[34px] place-items-center rounded-lg border-2 border-butty-ink bg-butty-cream text-butty-red"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </>
       )}
     </div>
@@ -256,9 +265,7 @@ function ToggleRow({
       <Icon size={20} className={on ? "text-butty-green" : "text-butty-red"} />
       <div className="flex-1">
         <div className="text-[14.5px] font-bold">{label}</div>
-        <div className="text-[12.5px] text-butty-muted">
-          {on ? onLabel : offLabel}
-        </div>
+        <div className="text-[12.5px] text-butty-muted">{on ? onLabel : offLabel}</div>
       </div>
       <button
         type="button"
@@ -288,40 +295,57 @@ function ItemEditor({
   onSave: (item: MenuItem) => void;
   onCancel: () => void;
 }) {
-  const [f, setF] = useState<MenuItem>(
-    item || {
-      id: "n" + Date.now(),
-      section: SECTION_ORDER[1],
-      name: "",
-      desc: "",
-      price: 5.0,
-      from: 8,
-      to: CLOSE,
-      soldOut: false,
-      veg: false,
-      allergens: [],
-      remove: [],
-      extras: [],
-      photo: "",
-    },
+  const [f, setF] = useState<MenuItem>(() => {
+    if (!item) {
+      return {
+        id: "n" + Date.now(),
+        section: SECTION_ORDER[1],
+        name: "",
+        desc: "",
+        price: 5.0,
+        from: 8,
+        to: CLOSE,
+        soldOut: false,
+        veg: false,
+        allergens: [],
+        remove: [],
+        extras: [],
+        photo: "",
+        subgroup: "",
+      };
+    }
+    return {
+      ...item,
+      subgroup: item.section === "Juices & Drinks" ? (drinkGroupOf(item) ?? "") : "",
+    };
+  });
+  const [groupTouched, setGroupTouched] = useState(
+    Boolean(item && item.section === "Juices & Drinks"),
   );
-  const set = <K extends keyof MenuItem>(k: K, v: MenuItem[K]) =>
-    setF((x) => ({ ...x, [k]: v }));
+  const [removeStr, setRemoveStr] = useState((item?.remove || []).join(", "));
+  const [extrasStr, setExtrasStr] = useState(
+    (item?.extras || []).map((e) => `${e.n} £${e.p.toFixed(2)}`).join("\n"),
+  );
+  const set = <K extends keyof MenuItem>(k: K, v: MenuItem[K]) => setF((x) => ({ ...x, [k]: v }));
+  const applyGroup = (group: string, touched: boolean) => {
+    if (touched) setGroupTouched(true);
+    set("subgroup", group);
+    setExtrasStr((current) => {
+      const standard = formatDrinkAddons();
+      const trimmed = current.trim();
+      if (drinkGroupHasAddons(group)) return trimmed === "" ? standard : current;
+      return trimmed === standard ? "" : current;
+    });
+  };
   const toggleAllergen = (a: string) =>
     set(
       "allergens",
-      f.allergens.includes(a)
-        ? f.allergens.filter((x) => x !== a)
-        : [...f.allergens, a],
+      f.allergens.includes(a) ? f.allergens.filter((x) => x !== a) : [...f.allergens, a],
     );
-  const valid = f.name.trim().length > 0 && f.price >= 0;
-
-  const [removeStr, setRemoveStr] = useState((item?.remove || []).join(", "));
-  const [extrasStr, setExtrasStr] = useState(
-    (item?.extras || [])
-      .map((e) => `${e.n} £${e.p.toFixed(2)}`)
-      .join("\n"),
-  );
+  const valid =
+    f.name.trim().length > 0 &&
+    f.price >= 0 &&
+    (f.section !== "Juices & Drinks" || Boolean(canonicalDrinkGroup(f.subgroup)));
 
   const commit = () => {
     const remove = removeStr
@@ -340,20 +364,24 @@ function ItemEditor({
       to: parseFloat(String(f.to)),
       remove,
       extras,
+      subgroup: f.section === "Juices & Drinks" ? canonicalDrinkGroup(f.subgroup) : null,
     });
   };
 
   return (
     <div className="mx-auto max-w-[620px] px-4 py-5 pb-10">
-      <ScreenHead
-        title={item ? "Edit item" : "New item"}
-        onBack={onCancel}
-      />
+      <ScreenHead title={item ? "Edit item" : "New item"} onBack={onCancel} />
       <div className="mt-4 grid gap-3.5">
         <Field label="Name">
           <input
             value={f.name}
-            onChange={(e) => set("name", e.target.value)}
+            onChange={(e) => {
+              const name = e.target.value;
+              set("name", name);
+              if (!groupTouched && f.section === "Juices & Drinks") {
+                applyGroup(guessDrinkGroup(name) ?? "", false);
+              }
+            }}
             style={inpStyle}
             placeholder="e.g. Pulled Beef Sub"
           />
@@ -394,7 +422,16 @@ function ItemEditor({
           <Field label="Section" className="flex-[2]">
             <select
               value={f.section}
-              onChange={(e) => set("section", e.target.value)}
+              onChange={(e) => {
+                const section = e.target.value;
+                if (section !== "Juices & Drinks") {
+                  setGroupTouched(false);
+                  setF((x) => ({ ...x, section, subgroup: "" }));
+                  return;
+                }
+                set("section", section);
+                if (!groupTouched) applyGroup(guessDrinkGroup(f.name) ?? "", false);
+              }}
               style={inpStyle}
             >
               {SECTION_ORDER.map((s) => (
@@ -403,6 +440,26 @@ function ItemEditor({
             </select>
           </Field>
         </div>
+        {f.section === "Juices & Drinks" && (
+          <Field label="Group">
+            <select
+              value={f.subgroup || ""}
+              onChange={(e) => applyGroup(e.target.value, true)}
+              style={inpStyle}
+            >
+              <option value="">Choose a group</option>
+              {DRINK_GROUPS.map((group) => (
+                <option key={group.name} value={group.name}>
+                  {group.name}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1.5 mb-0 text-[12px] text-butty-muted">
+              Heading on the menu. Leave extras empty on a juice or smoothie to use the protein
+              add-ons. Shakes do not have add-ons.
+            </p>
+          </Field>
+        )}
         <div className="flex gap-3">
           <Field label="Available from" className="flex-1">
             <select
@@ -451,11 +508,7 @@ function ItemEditor({
         <Field label="Allergens">
           <div className="flex flex-wrap gap-2">
             {ALLERGENS.map((a) => (
-              <Chip
-                key={a}
-                on={f.allergens.includes(a)}
-                onClick={() => toggleAllergen(a)}
-              >
+              <Chip key={a} on={f.allergens.includes(a)} onClick={() => toggleAllergen(a)}>
                 {a}
               </Chip>
             ))}

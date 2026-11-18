@@ -1,7 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getSql } from "@/lib/db";
 import { STAMPS_FOR_REWARD } from "@/lib/loyalty";
-import { isSandwichSection } from "@/lib/menu";
+import {
+  drinkSubgroupToStore,
+  DRINK_ADDONS,
+  drinkGroupHasAddons,
+  extrasForDrink,
+  isSandwichSection,
+} from "@/lib/menu";
 import { optionalAuth } from "@/lib/optional-auth";
 import {
   kitchenMiddleware,
@@ -42,6 +48,7 @@ type MenuRow = {
   removable: unknown;
   extras: unknown;
   photo?: string | null;
+  subgroup?: string | null;
 };
 
 type OrderRow = {
@@ -73,7 +80,7 @@ type LineRow = {
 };
 
 function rowToItem(r: MenuRow): MenuItem {
-  return {
+  const item: MenuItem = {
     id: r.id,
     section: r.section,
     name: r.name,
@@ -87,7 +94,19 @@ function rowToItem(r: MenuRow): MenuItem {
     remove: asJson<string[]>(r.removable, []),
     extras: asJson<Extra[]>(r.extras, []),
     photo: r.photo || `/menu/${r.id}.jpg`,
+    subgroup: r.subgroup ?? null,
   };
+  return { ...item, extras: extrasForDrink(item) };
+}
+
+function chargeableExtras(item: MenuRow): Extra[] {
+  return extrasForDrink({
+    id: item.id,
+    name: item.name,
+    section: item.section,
+    subgroup: item.subgroup,
+    extras: asJson<Extra[]>(item.extras, []),
+  });
 }
 
 function rowToOrder(o: OrderRow, lines: LineRow[]): Order {
@@ -170,7 +189,7 @@ export const getShopSnapshot = createServerFn({ method: "GET" }).handler(
     const sql = await getSql();
     const items = await sql<MenuRow>`
       select id, section, name, description, price, avail_from, avail_to,
-             sold_out, veg, allergens, removable, extras, photo
+             sold_out, veg, allergens, removable, extras, photo, subgroup
       from menu_items
       order by section, sort_order, name
     `;
@@ -250,7 +269,7 @@ export const placeShopOrder = createServerFn({ method: "POST" })
     if (ids.length === 0) throw new Error("Empty order");
     const ph = ids.map((_, i) => `$${i + 1}`).join(",");
     const items = await sql.query<MenuRow>(
-      `select id, name, price, extras, sold_out, section from menu_items where id in (${ph})`,
+      `select id, name, price, extras, sold_out, section, subgroup from menu_items where id in (${ph})`,
       ids,
     );
     const byId = new Map(items.map((i) => [i.id, i]));
@@ -259,7 +278,7 @@ export const placeShopOrder = createServerFn({ method: "POST" })
       const item = byId.get(l.itemId);
       if (!item) throw new Error(`Unknown item ${l.itemId}`);
       if (item.sold_out) throw new Error(`${item.name} is sold out`);
-      const extras = asJson<Extra[]>(item.extras, []);
+      const extras = chargeableExtras(item);
       let unit = num(item.price);
       const mods = Array.isArray(l.mods) ? l.mods : [];
       for (const m of mods) {
@@ -342,15 +361,7 @@ export const placeShopOrder = createServerFn({ method: "POST" })
         await sql.query(
           `insert into order_lines (order_id, item_id, name, qty, unit_price, line_price, mods)
            values ($1,$2,$3,$4,$5,$6,$7::jsonb)`,
-          [
-            id,
-            l.itemId,
-            l.name,
-            l.qty,
-            l.unit,
-            l.linePrice,
-            JSON.stringify(l.mods),
-          ],
+          [id, l.itemId, l.name, l.qty, l.unit, l.linePrice, JSON.stringify(l.mods)],
         );
       }
 
@@ -429,7 +440,7 @@ export const placeCounterOrder = createServerFn({ method: "POST" })
     if (ids.length === 0) throw new Error("Empty order");
     const ph = ids.map((_, i) => `$${i + 1}`).join(",");
     const items = await sql.query<MenuRow>(
-      `select id, name, price, extras, sold_out, section from menu_items where id in (${ph})`,
+      `select id, name, price, extras, sold_out, section, subgroup from menu_items where id in (${ph})`,
       ids,
     );
     const byId = new Map(items.map((i) => [i.id, i]));
@@ -438,7 +449,7 @@ export const placeCounterOrder = createServerFn({ method: "POST" })
       const item = byId.get(l.itemId);
       if (!item) throw new Error(`Unknown item ${l.itemId}`);
       if (item.sold_out) throw new Error(`${item.name} is sold out`);
-      const extras = asJson<Extra[]>(item.extras, []);
+      const extras = chargeableExtras(item);
       let unit = num(item.price);
       const mods = Array.isArray(l.mods) ? l.mods : [];
       for (const m of mods) {
@@ -522,15 +533,7 @@ export const placeCounterOrder = createServerFn({ method: "POST" })
         await sql.query(
           `insert into order_lines (order_id, item_id, name, qty, unit_price, line_price, mods)
            values ($1,$2,$3,$4,$5,$6,$7::jsonb)`,
-          [
-            id,
-            l.itemId,
-            l.name,
-            l.qty,
-            l.unit,
-            l.linePrice,
-            JSON.stringify(l.mods),
-          ],
+          [id, l.itemId, l.name, l.qty, l.unit, l.linePrice, JSON.stringify(l.mods)],
         );
       }
 
@@ -616,11 +619,9 @@ export const toggleSoldOut = createServerFn({ method: "POST" })
 
 export const setShopFlags = createServerFn({ method: "POST" })
   .middleware([managerMiddleware])
-  .validator((input: {
-    shopOpen?: boolean;
-    specialsPaused?: boolean;
-    renovating?: boolean;
-  }) => input)
+  .validator(
+    (input: { shopOpen?: boolean; specialsPaused?: boolean; renovating?: boolean }) => input,
+  )
   .handler(async ({ data }) => {
     const sql = await getSql();
     if (typeof data.shopOpen === "boolean") {
@@ -641,12 +642,16 @@ export const upsertMenuItem = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const item = data;
     const id = (item.id || "n" + Date.now()).slice(0, 40);
+    const subgroup = drinkSubgroupToStore(item);
+    let extras = Array.isArray(item.extras) ? item.extras : [];
+    if (subgroup === "Shakes") extras = [];
+    else if (extras.length === 0 && drinkGroupHasAddons(subgroup)) extras = DRINK_ADDONS;
     const sql = await getSql();
     await sql.query(
       `insert into menu_items
          (id, section, name, description, price, avail_from, avail_to,
-          sold_out, veg, allergens, removable, extras, sort_order, photo)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,100,$13)
+          sold_out, veg, allergens, removable, extras, sort_order, photo, subgroup)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::jsonb,100,$13,$14)
        on conflict (id) do update set
          section = excluded.section,
          name = excluded.name,
@@ -659,7 +664,8 @@ export const upsertMenuItem = createServerFn({ method: "POST" })
          allergens = excluded.allergens,
          removable = excluded.removable,
          extras = excluded.extras,
-         photo = excluded.photo`,
+         photo = excluded.photo,
+         subgroup = excluded.subgroup`,
       [
         id,
         item.section,
@@ -672,8 +678,9 @@ export const upsertMenuItem = createServerFn({ method: "POST" })
         !!item.veg,
         JSON.stringify(item.allergens || []),
         JSON.stringify(item.remove || []),
-        JSON.stringify(item.extras || []),
+        JSON.stringify(extras),
         item.photo?.trim() || null,
+        subgroup,
       ],
     );
     return { ok: true };
