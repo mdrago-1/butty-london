@@ -455,8 +455,8 @@ function ItemEditor({
               ))}
             </select>
             <p className="mt-1.5 mb-0 text-[12px] text-butty-muted">
-              Heading on the menu. Leave extras empty on a juice, shake, or smoothie to use the
-              protein add-ons.
+              Heading on the menu. Leave extras empty on a juice or smoothie to use the protein
+              add-ons. Shakes do not have add-ons.
             </p>
           </Field>
         )}

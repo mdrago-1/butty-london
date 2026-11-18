@@ -7,6 +7,8 @@
 -- Frozen, Matcha Boost, Hulk, Strawberry Shake, Chocolate Shake) are matched by
 -- name. They are inserted only when that drink is not already on the menu, so a
 -- database that already has them is left as the owner saved it.
+-- Shakes are not given protein add-ons. Any extras already stored on a shake
+-- (including Vanilla and Oreo) are cleared. Juices and smoothies keep theirs.
 
 alter table menu_items
   add column if not exists subgroup text;
@@ -142,7 +144,7 @@ from (
       'Strawberry Shake',
       'Milk, strawberry ice cream',
       5.00::numeric,
-      '[{"n": "Organic Protein Company whey protein", "p": 2.5}, {"n": "Cacao & Maca whey", "p": 2.5}, {"n": "Collagen (bovine)", "p": 2}, {"n": "Creatine", "p": 2}]'::jsonb,
+      '[]'::jsonb,
       'Shakes'
     ),
     (
@@ -150,7 +152,7 @@ from (
       'Chocolate Shake',
       'Milk, chocolate ice cream',
       6.00::numeric,
-      '[{"n": "Organic Protein Company whey protein", "p": 2.5}, {"n": "Cacao & Maca whey", "p": 2.5}, {"n": "Collagen (bovine)", "p": 2}, {"n": "Creatine", "p": 2}]'::jsonb,
+      '[]'::jsonb,
       'Shakes'
     )
 ) as v(id, name, description, price, extras, subgroup)
@@ -163,11 +165,22 @@ and not exists (
   select 1 from menu_items m where m.id = v.id
 );
 
--- Same add-ons the other juices, shakes, and smoothies already carry,
+-- Same add-ons the other juices and smoothies already carry,
 -- and only where a drink in those groups has none of its own.
+-- Shakes are not included: they have no protein add-ons.
 update menu_items
 set extras = '[{"n": "Organic Protein Company whey protein", "p": 2.5}, {"n": "Cacao & Maca whey", "p": 2.5}, {"n": "Collagen (bovine)", "p": 2}, {"n": "Creatine", "p": 2}]'::jsonb
 where section = 'Juices & Drinks'
-  and subgroup in ('Juice', 'Shakes', 'Smoothies')
+  and subgroup in ('Juice', 'Smoothies')
   and jsonb_typeof(extras) = 'array'
   and jsonb_array_length(extras) = 0;
+
+-- Vanilla, Oreo, and any other shake already store those add-ons from the
+-- old board. Clear them. Prices, names, and descriptions stay as they are.
+update menu_items
+set extras = '[]'::jsonb
+where section = 'Juices & Drinks'
+  and (
+    subgroup = 'Shakes'
+    or lower(regexp_replace(btrim(name), '\s+', ' ', 'g')) like '%shake%'
+  );

@@ -644,7 +644,8 @@ export const upsertMenuItem = createServerFn({ method: "POST" })
     const id = (item.id || "n" + Date.now()).slice(0, 40);
     const subgroup = drinkSubgroupToStore(item);
     let extras = Array.isArray(item.extras) ? item.extras : [];
-    if (extras.length === 0 && drinkGroupHasAddons(subgroup)) extras = DRINK_ADDONS;
+    if (subgroup === "Shakes") extras = [];
+    else if (extras.length === 0 && drinkGroupHasAddons(subgroup)) extras = DRINK_ADDONS;
     const sql = await getSql();
     await sql.query(
       `insert into menu_items

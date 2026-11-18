@@ -50,8 +50,9 @@ const ADDONS_NOTE =
   "Add-ons: whey protein £2.50 · cacao & maca whey £2.50 · collagen £2 · creatine £2";
 
 /**
- * Protein add-ons printed on the juice, shake, and smoothie boards.
- * Stored on each of those items; an empty extras list means "use these".
+ * Protein add-ons on the juice and smoothie boards.
+ * Shakes, coffee, and not-coffee do not use them. An empty extras list on a
+ * juice or smoothie means "use these".
  */
 export const DRINK_ADDONS: { n: string; p: number }[] = [
   { n: "Organic Protein Company whey protein", p: 2.5 },
@@ -75,7 +76,7 @@ export const DRINK_GROUPS: { name: string; note?: string; ids: string[] }[] = [
       "dr-cacao",
     ],
   },
-  { name: "Shakes", note: ADDONS_NOTE, ids: ["dr-shake-vanilla", "dr-shake-oreo"] },
+  { name: "Shakes", ids: ["dr-shake-vanilla", "dr-shake-oreo"] },
   { name: "Smoothies", note: ADDONS_NOTE, ids: ["dr-muscle", "dr-berry", "dr-tutti", "dr-nutty"] },
   { name: "Coffee", ids: ["dr-bullet", "dr-caplatte", "dr-flat", "dr-cortado", "dr-espresso"] },
   { name: "Not Coffee", ids: ["dr-matcha", "dr-choc", "dr-chai", "dr-tea", "dr-earl"] },
@@ -166,13 +167,15 @@ export function formatDrinkAddons(extras: { n: string; p: number }[] = DRINK_ADD
 
 /**
  * Extras shown and charged for a drink.
- * A juice, shake, or smoothie with none of its own uses the group add-ons.
+ * Shakes never carry add-ons. A juice or smoothie with none of its own uses
+ * the group add-ons.
  */
 export function extrasForDrink(
   item: DrinkGroupItem & {
     extras?: { n: string; p: number }[] | null;
   },
 ): { n: string; p: number }[] {
+  if (drinkGroupOf(item) === "Shakes") return [];
   const stored = item.extras ?? [];
   if (stored.length > 0) return stored;
   if (item.section != null && item.section !== "Juices & Drinks") return [];

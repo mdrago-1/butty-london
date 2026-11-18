@@ -94,7 +94,7 @@ describe("drink headings", () => {
     assert.ok(namesIn("Not Coffee").includes("Matcha Latte"));
     assert.ok(namesIn("Juice").includes("Green Giant"));
 
-    const withNote = new Set(["Juice", "Shakes", "Smoothies"]);
+    const withNote = new Set(["Juice", "Smoothies"]);
     for (const group of groups) {
       if (group.name && withNote.has(group.name)) {
         assert.match(group.note ?? "", /whey protein £2\.50/);
@@ -131,7 +131,7 @@ describe("drink headings", () => {
     assert.equal(odd.find((group) => group.name === "Smoothies")?.items.length, 1);
   });
 
-  it("gives juice, shakes, and smoothies the group add-ons when a row has none", () => {
+  it("gives juices and smoothies the group add-ons, and shakes none", () => {
     const inherited = extrasForDrink({
       id: "n-tropical",
       name: "Tropical",
@@ -148,6 +148,34 @@ describe("drink headings", () => {
         name: "Americano",
         section: "Juices & Drinks",
         extras: [],
+      }),
+      [],
+    );
+    assert.deepEqual(
+      extrasForDrink({
+        id: "dr-shake-vanilla",
+        name: "Vanilla Shake",
+        section: "Juices & Drinks",
+        extras: DRINK_ADDONS,
+      }),
+      [],
+    );
+    assert.deepEqual(
+      extrasForDrink({
+        id: "n-strawberry",
+        name: "Strawberry Shake",
+        section: "Juices & Drinks",
+        extras: DRINK_ADDONS,
+      }),
+      [],
+    );
+    assert.deepEqual(
+      extrasForDrink({
+        id: "dr-shake-oreo",
+        name: "Oreo Shake",
+        section: "Juices & Drinks",
+        subgroup: "Shakes",
+        extras: [{ n: "Oat milk", p: 0.5 }],
       }),
       [],
     );
@@ -210,10 +238,15 @@ function extrasOf(value: unknown): { n: string; p: number }[] {
 describe("drink subgroup migration", () => {
   it("keeps existing rows and files office-added drinks", { timeout: 60_000 }, async () => {
     const sql = readFileSync(join(migrationsDir, "0019_drink_subgroups.sql"), "utf8");
+    const clearShakes = readFileSync(join(migrationsDir, "0020_shakes_no_addons.sql"), "utf8");
     assert.doesNotMatch(sql, /\bset price\b/i);
     assert.doesNotMatch(sql, /\bset name\b/i);
     assert.doesNotMatch(sql, /\bset description\b/i);
     assert.doesNotMatch(sql, /\bdelete from menu_items\b/i);
+    assert.match(sql, /subgroup in \('Juice', 'Smoothies'\)/);
+    assert.doesNotMatch(sql, /'Juice', 'Shakes', 'Smoothies'/);
+    assert.match(clearShakes, /set extras = '\[\]'::jsonb/);
+    assert.doesNotMatch(clearShakes, /\bset price\b/i);
 
     const pg = new PGlite();
     await pg.waitReady;
@@ -248,6 +281,7 @@ describe("drink subgroup migration", () => {
 
     await pg.exec(sql);
     await pg.exec(sql);
+    await pg.exec(clearShakes);
 
     const after = (
       await pg.query<
@@ -286,7 +320,7 @@ describe("drink subgroup migration", () => {
       assert.equal(row.subgroup, group);
       assert.equal(num(row.sort_order), 77);
       const extras = extrasOf(row.extras);
-      if (group === "Coffee") assert.deepEqual(extras, []);
+      if (group === "Coffee" || group === "Shakes") assert.deepEqual(extras, []);
       else {
         assert.deepEqual(
           extras.map((extra) => extra.n),
@@ -294,6 +328,14 @@ describe("drink subgroup migration", () => {
         );
       }
     }
+
+    for (const id of ["dr-shake-vanilla", "dr-shake-oreo"]) {
+      assert.deepEqual(extrasOf(afterById.get(id)?.extras), []);
+    }
+    assert.deepEqual(
+      extrasOf(afterById.get("dr-green")?.extras).map((extra) => extra.n),
+      DRINK_ADDONS.map((extra) => extra.n),
+    );
 
     const names = after.map((row) => `${row.section}:${row.name}`);
     for (const name of Object.keys(expectGroup).map((id) => afterById.get(id)?.name)) {
