@@ -14,6 +14,8 @@ export type MenuItem = {
   remove: string[];
   extras: Extra[];
   photo?: string | null;
+  /** Juices & Drinks heading: Juice, Shakes, Smoothies, Coffee, or Not Coffee. */
+  subgroup?: string | null;
 };
 
 export type OrderLine = {
