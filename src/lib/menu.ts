@@ -39,9 +39,9 @@ export function menuPhotoUrl(item?: { id?: string; photo?: string | null } | nul
 }
 
 export const SECTION_NOTES: Record<string, string> = {
-  "Breakfast Butties": "Served 7:30am – 11:30am",
+  "Breakfast Butties": "Served 7:30am – 11am",
   "All-Day Sandwiches": "Served 8am – close",
-  "Lunch Specials": "Hot, made fresh 11:30am – 4pm",
+  "Lunch Specials": "Hot, made fresh 11am – 4pm",
   "Juices & Drinks": "Pressed fresh, all day",
 };
 
